@@ -73,6 +73,13 @@ Copy-Item $sdlLib.FullName, $sdlDll.FullName (Join-Path $sdlSdk 'lib\x64') -Forc
 
 # ---------------------------------------------------------------------------
 Step 'Engine (waf, --enable-uwp)'
+# Xbox-only changes to submodules are kept as patches so the submodules stay pristine
+foreach ($patch in Get-ChildItem (Join-Path $Root 'uwp\patches') -Filter '*.patch' -ErrorAction SilentlyContinue) {
+	$sub = switch -Wildcard ($patch.Name) { 'mainui-*' { '3rdparty\mainui' } default { $null } }
+	if (-not $sub) { throw "Don't know which submodule $($patch.Name) is for" }
+	Run git @('-C', (Join-Path $Root $sub), 'apply', '--whitespace=nowarn', $patch.FullName)
+	Write-Host "Applied $($patch.Name) to $sub"
+}
 $engineOut = Join-Path $Work 'engine-install'
 try {
 	Run "$Root\waf.bat" @('configure', '-s', $sdlSdk, '-T', 'release', '-8', '--enable-uwp',

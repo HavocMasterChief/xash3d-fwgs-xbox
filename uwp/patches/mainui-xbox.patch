@@ -1,0 +1,35 @@
+diff --git a/menus/Main.cpp b/menus/Main.cpp
+index 4d1a382..64d30c9 100644
+--- a/menus/Main.cpp
++++ b/menus/Main.cpp
+@@ -292,15 +292,19 @@ void CMenuMain::_Init( void )
+ 
+ 	AddItem( configuration );
+ 	AddItem( saveRestore );
++#if !XASH_UWP // Xbox build: single player only
+ 	AddItem( multiPlayer );
++#endif
+ 
+ 	if ( bCustomGame )
+ 		AddItem( customGame );
+ 
+ 	AddItem( previews );
+ 	AddItem( quit );
++#if !XASH_UWP // Xbox build: no desktop window to minimize or close
+ 	AddItem( minimizeBtn );
+ 	AddItem( quitButton );
++#endif
+ }
+ 
+ /*
+@@ -334,8 +338,10 @@ void CMenuMain::VidInit( bool connected )
+ 		yoffset -= ygap;
+ 	}
+ 
++#if !XASH_UWP
+ 	multiPlayer.SetCoord( hoffset, yoffset );
+ 	yoffset -= ygap;
++#endif
+ 
+ 	bool single = gpGlobals->maxClients < 2;
+ 
