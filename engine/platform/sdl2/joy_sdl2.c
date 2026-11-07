@@ -397,6 +397,29 @@ void Platform_Vibrate2( float time, int val1, int val2, uint flags )
 #endif // SDL_VERSION_ATLEAST( 2, 0, 9 )
 }
 
+#if XASH_UWP
+/*
+=============
+Platform_XbRumble
+
+Body motors plus the Xbox controller's trigger motors (impulse triggers),
+values 0..1. Used by the xb_rumble command (client weapon kick, gore).
+=============
+*/
+void Platform_XbRumble( float low, float high, int ms, float rightTrigger, float leftTrigger )
+{
+	SDL_GameController *gc = g_current_gamepad;
+
+	if( g_current_gamepad_id < 0 || !gc )
+		return;
+
+	SDL_GameControllerRumble( gc, (Uint16)( bound( 0.0f, low, 1.0f ) * 0xFFFF ), (Uint16)( bound( 0.0f, high, 1.0f ) * 0xFFFF ), ms );
+#if SDL_VERSION_ATLEAST( 2, 0, 14 )
+	SDL_GameControllerRumbleTriggers( gc, (Uint16)( bound( 0.0f, leftTrigger, 1.0f ) * 0xFFFF ), (Uint16)( bound( 0.0f, rightTrigger, 1.0f ) * 0xFFFF ), ms );
+#endif
+}
+#endif // XASH_UWP
+
 /*
 =============
 Platform_Vibrate

@@ -94,6 +94,22 @@ static void Joy_XbCrouchDown_f( void )
 	}
 }
 
+static void Joy_XbRumble_f( void )
+{
+	// xb_rumble <low> <high> <ms> <right trigger> <left trigger>, 0..1
+	if( Cmd_Argc() < 4 )
+	{
+		Con_Printf( S_USAGE "xb_rumble <low 0..1> <high 0..1> <ms> [right trigger] [left trigger]\n" );
+		return;
+	}
+
+	if( !Cvar_VariableValue( "vibration_enable" ))
+		return;
+
+	Platform_XbRumble( Q_atof( Cmd_Argv( 1 )), Q_atof( Cmd_Argv( 2 )), Q_atoi( Cmd_Argv( 3 )),
+		Cmd_Argc() > 4 ? Q_atof( Cmd_Argv( 4 )) : 0.0f, Cmd_Argc() > 5 ? Q_atof( Cmd_Argv( 5 )) : 0.0f );
+}
+
 static void Joy_XbCrouchUp_f( void )
 {
 	if( !joy_crouch_toggle.value )
@@ -1133,6 +1149,7 @@ void Joy_Init( void )
 	Cvar_RegisterVariable( &joy_crouch_toggle );
 	Cmd_AddCommand( "+xbcrouch", Joy_XbCrouchDown_f, "crouch, held or toggled (joy_crouch_toggle)" );
 	Cmd_AddCommand( "-xbcrouch", Joy_XbCrouchUp_f, "release crouch when not toggled" );
+	Cmd_AddCommand( "xb_rumble", Joy_XbRumble_f, "controller rumble: low high ms [right trigger] [left trigger]" );
 #endif
 	Cvar_RegisterVariable( &joy_side );
 	Cvar_RegisterVariable( &joy_forward );

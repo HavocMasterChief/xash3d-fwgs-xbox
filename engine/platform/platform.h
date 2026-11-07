@@ -338,6 +338,9 @@ static inline qboolean Platform_LibraryExists( const char *name, qboolean gamedi
 */
 #if XASH_SDL >= 2 || XASH_PS4
 void Platform_Vibrate( float life, char flags ); // left for compatibility
+#if XASH_UWP
+void Platform_XbRumble( float low, float high, int ms, float rightTrigger, float leftTrigger );
+#endif
 void Platform_Vibrate2( float time, int low_freq, int high_freq, uint flags );
 #else
 static inline void Platform_Vibrate( float life, char flags ) {}

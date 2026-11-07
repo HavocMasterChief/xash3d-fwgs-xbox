@@ -729,6 +729,15 @@ static void R_RenderInfo( qboolean startup )
 	gEngfuncs.Con_Printf( "GL_VENDOR: %s\n", glConfig.vendor_string );
 	gEngfuncs.Con_Printf( "GL_RENDERER: %s\n", glConfig.renderer_string );
 	gEngfuncs.Con_Printf( "GL_VERSION: %s\n", glConfig.version_string );
+#if XASH_UWP
+	{
+		// z-fighting diagnostics: what ANGLE actually gave us
+		GLint depthBits = 0, stencilBits = 0;
+		pglGetIntegerv( 0x0D56 /* GL_DEPTH_BITS */, &depthBits );
+		pglGetIntegerv( 0x0D57 /* GL_STENCIL_BITS */, &stencilBits );
+		gEngfuncs.Con_Printf( "GL_DEPTH_BITS: %d, GL_STENCIL_BITS: %d (asked for %d/%d)\n", depthBits, stencilBits, glConfig.depth_bits, glConfig.stencil_bits );
+	}
+#endif
 
 	// don't spam about extensions
 	gEngfuncs.Con_Reportf( "GL_EXTENSIONS: %s\n", glConfig.extensions_string );

@@ -13,21 +13,22 @@ index 152fb47..2603c4a 100644
  	AddItem( vibration );
  }
 diff --git a/menus/Configuration.cpp b/menus/Configuration.cpp
-index 6e0a981..712272c 100644
+index 6e0a981..411ca73 100644
 --- a/menus/Configuration.cpp
 +++ b/menus/Configuration.cpp
-@@ -27,6 +27,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+@@ -27,6 +27,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  
  #define ART_BANNER	     	"gfx/shell/head_config"
  
 +#if XASH_UWP
 +void UI_XboxController_Menu( void );
++void UI_XboxGameplay_Menu( void );
 +#endif
 +
  class CMenuOptions: public CMenuFramework
  {
  private:
-@@ -55,6 +59,16 @@ void CMenuOptions::_Init( void )
+@@ -55,6 +60,18 @@ void CMenuOptions::_Init( void )
  	msgBox.Link( this );
  
  	AddItem( banner );
@@ -36,6 +37,8 @@ index 6e0a981..712272c 100644
 +	// raw gamepad axis mapping, video modes or online update check.
 +	AddButton( L( "Controller" ), L( "Controller layout, look sensitivity and aim assist" ),
 +		PC_CONTROLS, UI_XboxController_Menu, QMF_NOTIFY );
++	AddButton( L( "Gameplay" ), L( "Blood and gore, controller vibration" ),
++		PC_GAME_OPTIONS, UI_XboxGameplay_Menu, QMF_NOTIFY );
 +	AddButton( L( "GameUI_Audio" ), L( "Change sound volume and quality" ),
 +		PC_AUDIO, UI_Audio_Menu, QMF_NOTIFY );
 +	AddButton( L( "GameUI_Video" ), L( "Change screen size, gamma and image quality" ),
@@ -44,7 +47,7 @@ index 6e0a981..712272c 100644
  	AddButton( L( "Controls" ), L( "Change keyboard and mouse settings" ),
  		PC_CONTROLS, UI_Controls_Menu, QMF_NOTIFY );
  	AddButton( L( "GameUI_Audio" ), L( "Change sound volume and quality" ),
-@@ -67,6 +81,7 @@ void CMenuOptions::_Init( void )
+@@ -67,6 +84,7 @@ void CMenuOptions::_Init( void )
  		PC_GAMEPAD, UI_GamePad_Menu, QMF_NOTIFY, 'g' );
  	AddButton( L( "Update" ), L( "Check for updates" ),
  		PC_UPDATE, msgBox.MakeOpenEvent(), QMF_NOTIFY );
@@ -251,5 +254,92 @@ index 0000000..eba303f
 +}
 +
 +ADD_MENU( menu_xbox_controller, CMenuXboxController, UI_XboxController_Menu );
++
++#endif // XASH_UWP
+diff --git a/menus/XboxGameplay.cpp b/menus/XboxGameplay.cpp
+new file mode 100644
+index 0000000..cc4faa4
+--- /dev/null
++++ b/menus/XboxGameplay.cpp
+@@ -0,0 +1,81 @@
++/*
++XboxGameplay.cpp - gameplay options for the Xbox build
++Copyright (C) 2026 HavocMasterChief
++
++This program is free software; you can redistribute it and/or
++modify it under the terms of the GNU General Public License
++as published by the Free Software Foundation; either version 2
++of the License, or (at your option) any later version.
++
++This program is distributed in the hope that it will be useful,
++but WITHOUT ANY WARRANTY; without even the implied warranty of
++MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
++See the GNU General Public License for more details.
++
++Blood mode (xb_blood, game DLL dlls/xb_gore.cpp) and controller vibration.
++*/
++
++#if XASH_UWP
++
++#include "Framework.h"
++#include "PicButton.h"
++#include "CheckBox.h"
++#include "SpinControl.h"
++#include "StringArrayModel.h"
++
++#define ART_BANNER "gfx/shell/head_config"
++
++class CMenuXboxGameplay : public CMenuFramework
++{
++public:
++	typedef CMenuFramework BaseClass;
++	CMenuXboxGameplay() : CMenuFramework( "CMenuXboxGameplay" ) { }
++
++private:
++	void _Init() override;
++	void _VidInit() override;
++	void SaveAndPopMenu() override;
++
++	CMenuSpinControl blood;
++	CMenuCheckBox vibration;
++};
++
++void CMenuXboxGameplay::SaveAndPopMenu()
++{
++	blood.WriteCvar();
++	vibration.WriteCvar();
++	CMenuFramework::SaveAndPopMenu();
++}
++
++void CMenuXboxGameplay::_Init()
++{
++	static const char *bloodNames[] = { "Disabled", "Default", "Green", "Extreme" };
++	static CStringArrayModel bloodModel( bloodNames, V_ARRAYSIZE( bloodNames ));
++
++	banner.SetPicture( ART_BANNER );
++
++	blood.SetNameAndStatus( L( "Blood" ),
++		L( "Default: pools under bodies. Green: alien-coloured blood. Extreme: spurts, wall runs, ceiling drips, blood on screen" ));
++	blood.Setup( &bloodModel );
++	blood.onChanged = CMenuEditable::WriteCvarCb;
++	blood.SetRect( 330, 280, 300, 32 );
++
++	vibration.SetNameAndStatus( L( "Controller vibration" ), L( "Rumble when firing, taking damage and from explosions" ));
++	vibration.onChanged = CMenuEditable::WriteCvarCb;
++	vibration.SetCoord( 330, 360 );
++
++	AddItem( banner );
++	AddButton( L( "Done" ), L( "Go back to the previous menu" ), PC_DONE, VoidCb( &CMenuXboxGameplay::SaveAndPopMenu ), QMF_NOTIFY );
++	AddItem( blood );
++	AddItem( vibration );
++}
++
++void CMenuXboxGameplay::_VidInit()
++{
++	blood.LinkCvar( "xb_blood", CMenuEditable::CVAR_VALUE );
++	vibration.LinkCvar( "vibration_enable" );
++}
++
++ADD_MENU( menu_xbox_gameplay, CMenuXboxGameplay, UI_XboxGameplay_Menu );
 +
 +#endif // XASH_UWP
