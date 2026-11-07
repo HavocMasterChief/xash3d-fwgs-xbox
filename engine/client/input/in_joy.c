@@ -66,8 +66,20 @@ static struct joy_touchpad_s
 
 static qboolean joy_initialized;
 
+#if XASH_UWP
+// Xbox: same base turn speed as RealRTCWX (j_pitch/j_yaw 200)
+static CVAR_DEFINE_AUTO( joy_pitch,   "200.0", FCVAR_ARCHIVE | FCVAR_FILTERABLE, "joystick pitch sensitivity" );
+static CVAR_DEFINE_AUTO( joy_yaw,     "200.0", FCVAR_ARCHIVE | FCVAR_FILTERABLE, "joystick yaw sensitivity" );
+static CVAR_DEFINE_AUTO( joy_look_sens, "1.0", FCVAR_ARCHIVE | FCVAR_FILTERABLE, "gamepad look sensitivity multiplier (menu slider)" );
+static CVAR_DEFINE_AUTO( joy_look_curve, "1.6", FCVAR_ARCHIVE | FCVAR_FILTERABLE, "gamepad look response curve: 1 linear, higher = finer aim near the centre" );
+static CVAR_DEFINE_AUTO( joy_look_deadzone, "0.15", FCVAR_ARCHIVE | FCVAR_FILTERABLE, "gamepad look stick radial deadzone, 0..0.5" );
+static CVAR_DEFINE_AUTO( joy_quickturn, "1", FCVAR_ARCHIVE | FCVAR_FILTERABLE, "speed up turning after holding the look stick fully sideways" );
+static CVAR_DEFINE_AUTO( joy_invert, "0", FCVAR_ARCHIVE | FCVAR_FILTERABLE, "invert gamepad look up/down" );
+static CVAR_DEFINE_AUTO( joy_aimassist, "2", FCVAR_ARCHIVE | FCVAR_FILTERABLE, "gamepad aim assist: 0 off, 1 low, 2 medium, 3 high" );
+#else
 static CVAR_DEFINE_AUTO( joy_pitch,   "100.0", FCVAR_ARCHIVE | FCVAR_FILTERABLE, "joystick pitch sensitivity" );
 static CVAR_DEFINE_AUTO( joy_yaw,     "100.0", FCVAR_ARCHIVE | FCVAR_FILTERABLE, "joystick yaw sensitivity" );
+#endif
 static CVAR_DEFINE_AUTO( joy_side,    "1.0", FCVAR_ARCHIVE | FCVAR_FILTERABLE, "joystick side sensitivity. Values from -1.0 to 1.0" );
 static CVAR_DEFINE_AUTO( joy_forward, "1.0", FCVAR_ARCHIVE | FCVAR_FILTERABLE, "joystick forward sensitivity. Values from -1.0 to 1.0" );
 static CVAR_DEFINE_AUTO( joy_lt_threshold, "16384", FCVAR_ARCHIVE | FCVAR_FILTERABLE, "left trigger threshold. Value from 0 to 32767");
@@ -517,6 +529,136 @@ Joy_FinalizeMove
 Append movement from axis. Called everyframe
 =============
 */
+#if XASH_UWP
+/*
+=============
+Joy_XboxLook
+
+Look stick for the Xbox build, ported from RealRTCWX CL_JoystickMove:
+radial deadzone, response curve, quick turn, and aim assist (slowdown,
+magnet and strafe follow, with breakout and escape so it never feels
+glued). The stock path is a per-axis cut-off with a linear response,
+which feels loose and imprecise on a controller.
+=============
+*/
+float AimAssist_FindTarget( const vec3_t viewangles, float *dyaw, float *dpitch );
+
+static void Joy_XboxLook( float fw, float side, float *dpitch, float *dyaw )
+{
+	static const struct
+	{
+		float slowdown, magnet, strafemagnet, minstrength, minstick, turnrate;
+	} presets[] =
+	{
+		{ 0.00f, 0.00f, 0.00f, 1.00f, 0.12f,   0.0f }, // off
+		{ 0.42f, 0.26f, 0.14f, 0.55f, 0.11f, 130.0f }, // low
+		{ 0.60f, 0.42f, 0.24f, 0.40f, 0.10f, 175.0f }, // medium
+		{ 0.78f, 0.60f, 0.34f, 0.30f, 0.09f, 220.0f }, // high
+	};
+	const float breakout = 0.75f;
+	const float dt = host.realframetime;
+	static float fullTilt;
+	float yawAxis = -(float)joyaxis[JOY_AXIS_YAW].rawval / (float)SHRT_MAX;     // + = turn left
+	float pitchAxis = (float)joyaxis[JOY_AXIS_PITCH].rawval / (float)SHRT_MAX;  // + = look down
+	float mag = sqrt( yawAxis * yawAxis + pitchAxis * pitchAxis );
+	float dz = bound( 0.0f, joy_look_deadzone.value, 0.5f );
+	float yaw = 0.0f, pitch = 0.0f, stickMag = 0.0f;
+	int preset = bound( 0, (int)joy_aimassist.value, (int)ARRAYSIZE( presets ) - 1 );
+
+	if( joy_invert.value )
+		pitchAxis = -pitchAxis;
+
+	// radial deadzone, rescaled so movement starts smoothly at the edge of it
+	if( mag > dz )
+	{
+		float m = ( Q_min( mag, 1.0f ) - dz ) / ( 1.0f - dz );
+		float scale;
+
+		stickMag = m;
+
+		// curve: fine control near the centre, full speed at the edge
+		scale = joy_look_curve.value > 1.0f ? pow( m, joy_look_curve.value ) : m;
+		scale /= mag;
+
+		yaw = yawAxis * scale * joy_yaw.value * joy_look_sens.value;
+		pitch = pitchAxis * scale * joy_pitch.value * joy_look_sens.value;
+
+		// quick turn: held fully sideways for a moment, turning speeds up
+		if( joy_quickturn.value && mag > 0.94f && fabs( yawAxis ) > 0.7f )
+			fullTilt += dt;
+		else fullTilt = 0.0f;
+
+		if( fullTilt > 0.2f )
+			yaw *= 1.0f + 0.9f * Q_min(( fullTilt - 0.2f ) / 0.35f, 1.0f );
+	}
+	else fullTilt = 0.0f;
+
+	if( preset > 0 && cls.key_dest == key_game )
+	{
+		float dy, dp;
+		float strength = AimAssist_FindTarget( cl.viewangles, &dy, &dp );
+
+		if( strength > 0.0f && stickMag < breakout )
+		{
+			float maxStep = presets[preset].turnrate * dt;
+			float escape = 1.0f;
+
+			dy = bound( -maxStep, dy, maxStep );
+			dp = bound( -maxStep, dp, maxStep );
+
+			// pushing against the correction fades the assist out
+			if( stickMag >= 0.06f && ( yaw || pitch ))
+			{
+				float inLen = sqrt( yaw * yaw + pitch * pitch );
+				float corLen = sqrt( dy * dy + dp * dp );
+
+				if( corLen > 0.001f )
+				{
+					float align = ( yaw / inLen ) * ( dy / corLen ) + ( pitch / inLen ) * ( dp / corLen );
+
+					if( align < 0.0f )
+						escape = 1.0f - Q_min( -align / 0.25f, 1.0f );
+				}
+			}
+
+			// 1) slowdown while aiming across a target
+			if( stickMag >= presets[preset].minstick )
+			{
+				float relief = Q_max( 1.0f - stickMag / breakout, 0.0f );
+				float scale = 1.0f - strength * presets[preset].slowdown * relief * escape;
+
+				scale = Q_max( scale, 0.65f ); // lower feels like glue
+				yaw *= scale;
+				pitch *= scale;
+			}
+
+			// 2) magnet on small corrections only
+			if( stickMag >= presets[preset].minstick && stickMag <= 0.65f && escape > 0.0f )
+			{
+				float w = 1.0f - stickMag / 0.65f;
+				float m = presets[preset].magnet * strength * escape * w * w;
+
+				*dyaw += dy * m;
+				*dpitch += dp * m * 0.65f;
+			}
+
+			// 3) strafe follow: moving, look stick idle
+			if( stickMag < 0.10f && strength >= presets[preset].minstrength && sqrt( fw * fw + side * side ) > 0.3f )
+			{
+				float maxStrafe = 30.0f * dt;
+				float m = presets[preset].strafemagnet * strength * escape;
+
+				*dyaw += bound( -maxStrafe, dy, maxStrafe ) * m;
+				*dpitch += bound( -maxStrafe, dp, maxStrafe ) * m * 0.25f;
+			}
+		}
+	}
+
+	*dyaw += yaw * dt;
+	*dpitch += pitch * dt;
+}
+#endif // XASH_UWP
+
 void Joy_FinalizeMove( float *fw, float *side, float *dpitch, float *dyaw )
 {
 	Joy_TouchpadMove( fw, side, dpitch, dyaw );
@@ -547,8 +689,12 @@ void Joy_FinalizeMove( float *fw, float *side, float *dpitch, float *dyaw )
 
 	*fw     -= joy_forward.value * (float)joyaxis[JOY_AXIS_FWD ].val/(float)SHRT_MAX;  // must be form -1.0 to 1.0
 	*side   += joy_side.value    * (float)joyaxis[JOY_AXIS_SIDE].val/(float)SHRT_MAX;
+#if XASH_UWP
+	Joy_XboxLook( *fw, *side, dpitch, dyaw );
+#else
 	*dpitch += joy_pitch.value * (float)joyaxis[JOY_AXIS_PITCH].val/(float)SHRT_MAX * host.realframetime;
 	*dyaw   -= joy_yaw.value   * (float)joyaxis[JOY_AXIS_YAW  ].val/(float)SHRT_MAX * host.realframetime;
+#endif
 
 	if( joy_gyro_enable.value && joy_have_gyro.value && (int)joy_calibrated.value == JOY_CALIBRATED )
 	{
@@ -940,6 +1086,14 @@ void Joy_Init( void )
 
 	Cvar_RegisterVariable( &joy_pitch );
 	Cvar_RegisterVariable( &joy_yaw );
+#if XASH_UWP
+	Cvar_RegisterVariable( &joy_look_sens );
+	Cvar_RegisterVariable( &joy_look_curve );
+	Cvar_RegisterVariable( &joy_look_deadzone );
+	Cvar_RegisterVariable( &joy_quickturn );
+	Cvar_RegisterVariable( &joy_invert );
+	Cvar_RegisterVariable( &joy_aimassist );
+#endif
 	Cvar_RegisterVariable( &joy_side );
 	Cvar_RegisterVariable( &joy_forward );
 
