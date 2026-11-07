@@ -88,7 +88,7 @@ Run "$Root\waf.bat" @('install', "--destdir=$engineOut")
 Step "Game code ($HlsdkRepo @ $HlsdkBranch)"
 $hlsdk = Join-Path $Work 'hlsdk'
 if (-not (Test-Path $hlsdk)) {
-	Run git @('clone', '--depth', '1', '-b', $HlsdkBranch, $HlsdkRepo, $hlsdk)
+	Run git @('clone', '--depth', '1', '--recurse-submodules', '--shallow-submodules', '-b', $HlsdkBranch, $HlsdkRepo, $hlsdk)
 }
 $hlsdkBuild = Join-Path $Work 'hlsdk-build'
 Run cmake @('-S', $hlsdk, '-B', $hlsdkBuild, '-G', 'Visual Studio 17 2022', '-A', 'x64',
