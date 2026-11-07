@@ -1,8 +1,21 @@
 diff --git a/menus/Main.cpp b/menus/Main.cpp
-index 4d1a382..64d30c9 100644
+index 4d1a382..efd0857 100644
 --- a/menus/Main.cpp
 +++ b/menus/Main.cpp
-@@ -292,15 +292,19 @@ void CMenuMain::_Init( void )
+@@ -133,10 +133,12 @@ bool CMenuMain::KeyDown( int key )
+ 			if( !dialog.IsVisible() )
+ 				UI_CloseMenu();
+ 		}
++#if !XASH_UWP // Xbox: B on the title menu does nothing, Quit is still in the list
+ 		else
+ 		{
+ 			QuitDialogCb( );
+ 		}
++#endif
+ 		return true;
+ 	}
+ 	return CMenuFramework::KeyDown( key );
+@@ -292,15 +294,19 @@ void CMenuMain::_Init( void )
  
  	AddItem( configuration );
  	AddItem( saveRestore );
@@ -22,7 +35,7 @@ index 4d1a382..64d30c9 100644
  }
  
  /*
-@@ -334,8 +338,10 @@ void CMenuMain::VidInit( bool connected )
+@@ -334,8 +340,10 @@ void CMenuMain::VidInit( bool connected )
  		yoffset -= ygap;
  	}
  
