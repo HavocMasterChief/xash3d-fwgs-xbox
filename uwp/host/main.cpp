@@ -17,7 +17,9 @@ only exists because a UWP app needs a CoreWindow entry point, which
 SDL_winrt_main_NonXAML.cpp provides; SDL then calls main() below.
 
 Game data is read from the app's LocalState folder, where the user
-copies their own "valve" folder through the Xbox Device Portal.
+copies their Half-Life files into LocalState/HalfLife through the
+Xbox Device Portal. Expansions get sibling folders (BlueShift, OpposingForce,
+Decay) that fall back to HalfLife for shared content.
 */
 
 #include <windows.h>
@@ -94,5 +96,6 @@ int main( int argc, char *argv[] )
 	(void)argc;
 	(void)argv;
 
-	return Host_Main( 6, engineArgs, "valve", 0, NULL );
+	// base game folder in LocalState (and in the package)
+	return Host_Main( 6, engineArgs, "HalfLife", 0, NULL );
 }

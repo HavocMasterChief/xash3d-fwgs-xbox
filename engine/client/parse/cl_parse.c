@@ -22,6 +22,10 @@ GNU General Public License for more details.
 #include "input.h"
 #include "eiface.h"
 
+#ifndef XASH_GAMEDIR
+#define XASH_GAMEDIR "valve" // base game folder, set with waf --gamedir
+#endif
+
 #if XASH_LOW_MEMORY != 2
 int CL_UPDATE_BACKUP = SINGLEPLAYER_BACKUP;
 #endif
@@ -2291,7 +2295,7 @@ void CL_ParseUserMessage( sizebuf_t *msg, int svc_num, connprotocol_t proto )
 
 #ifdef HACKS_RELATED_HLMODS
 		// run final credits for Half-Life because hl1 doesn't have call END_SECTION
-		if( !Q_stricmp( clgame.msg[i].name, "HudText" ) && !Q_stricmp( GI->gamefolder, "valve" ))
+		if( !Q_stricmp( clgame.msg[i].name, "HudText" ) && !Q_stricmp( GI->gamefolder, XASH_GAMEDIR ))
 		{
 			// it's a end, so we should run credits
 			if( !Q_strcmp( (char *)pbuf, "END3" ))

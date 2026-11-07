@@ -28,6 +28,10 @@ GNU General Public License for more details.
 #include "common/protocol.h"
 #include "library_suffix.h"
 
+#ifndef XASH_GAMEDIR
+#define XASH_GAMEDIR "valve" // base game folder, set with waf --gamedir
+#endif
+
 #define SAVE_AGED_COUNT 2 // the default count of quick and auto saves
 
 /*
@@ -302,7 +306,7 @@ static void FS_ParseGenericGameInfo( gameinfo_t *GameInfo, const char *buf, cons
 					// This was made because Half-Life has multiplayer,
 					// but for some reason it's marked as singleplayer_only.
 					// Old WON version is fine.
-					if( !Q_stricmp( GameInfo->gamefolder, "valve") )
+					if( !Q_stricmp( GameInfo->gamefolder, XASH_GAMEDIR) )
 						GameInfo->gamemode = GAME_NORMAL;
 					else
 						GameInfo->gamemode = GAME_SINGLEPLAYER_ONLY;
@@ -414,7 +418,7 @@ static void FS_ParseGenericGameInfo( gameinfo_t *GameInfo, const char *buf, cons
 				// This was made because Half-Life has multiplayer,
 				// but for some reason it's marked as singleplayer_only.
 				// Old WON version is fine.
-				if( !Q_stricmp( token, "singleplayer_only" ) && Q_stricmp( GameInfo->gamefolder, "valve") )
+				if( !Q_stricmp( token, "singleplayer_only" ) && Q_stricmp( GameInfo->gamefolder, XASH_GAMEDIR) )
 					GameInfo->gamemode = GAME_SINGLEPLAYER_ONLY;
 				else if( !Q_stricmp( token, "multiplayer_only" ))
 					GameInfo->gamemode = GAME_MULTIPLAYER_ONLY;

@@ -403,6 +403,27 @@ qboolean Platform_CheckLibraryDirectDependency( const byte *data, size_t size, c
 	return false;
 }
 
+#if XASH_UWP
+static HMODULE UWP_LoadPackaged( const char *relpath )
+{
+	char path[MAX_OSPATH];
+	HMODULE h;
+
+	Q_strncpy( path, relpath, sizeof( path ));
+	COM_DefaultExtension( path, ".dll", sizeof( path ));
+
+	for( char *p = path; *p; p++ )
+	{
+		if( *p == '/' )
+			*p = '\\';
+	}
+
+	h = LoadPackagedLibrary( FS_PathToWideChar( path ), 0 );
+	Con_Reportf( "%s: %s -> %s\n", __func__, path, h ? "ok" : "not found" );
+	return h;
+}
+#endif // XASH_UWP
+
 /*
 ================
 COM_LoadLibrary
@@ -419,10 +440,10 @@ void *COM_LoadLibrary( const char *dllname, int build_ordinals_table, qboolean d
 	dll_user_t *hInst = FS_FindLibrary( dllname, directpath );
 
 #if XASH_UWP
-	// UWP can only load DLLs that ship inside the app package, and only by
-	// package-relative name. Game data (and the original x86 DLLs) live in
-	// LocalState, so whatever the filesystem found, load the packaged copy
-	// with the same file name instead.
+	// UWP can only load DLLs that ship inside the app package, by package-relative
+	// path. Game data lives in LocalState, and the package mirrors its layout for
+	// game libraries (e.g. HalfLife\\dlls\\hl_amd64.dll), so map whatever the
+	// filesystem found (or would have found) onto the packaged copy.
 	if( !hInst )
 	{
 		hInst = Mem_Calloc( host.mempool, sizeof( dll_user_t ));
@@ -432,16 +453,37 @@ void *COM_LoadLibrary( const char *dllname, int build_ordinals_table, qboolean d
 	}
 
 	{
-		char pkgname[MAX_OSPATH];
+		const char *root = getenv( "XASH3D_BASEDIR" );
+		size_t rootlen = root ? Q_strlen( root ) : 0;
+		char path[MAX_OSPATH];
 
-		Q_strncpy( pkgname, COM_FileWithoutPath( hInst->fullPath ), sizeof( pkgname ));
-		COM_DefaultExtension( pkgname, ".dll", sizeof( pkgname ));
+		// 1. found in LocalState: same relative path inside the package
+		if( rootlen && !Q_strnicmp( hInst->fullPath, root, rootlen ) && ( hInst->fullPath[rootlen] == '/' || hInst->fullPath[rootlen] == '\\' ))
+			hInst->hInstance = UWP_LoadPackaged( hInst->fullPath + rootlen + 1 );
 
-		hInst->hInstance = LoadPackagedLibrary( FS_PathToWideChar( pkgname ), 0 );
+		// 2. relative to the current game folder, then the base game folder
+		if( !hInst->hInstance && FI && !COM_StringEmpty( GI->gamefolder ))
+		{
+			Q_snprintf( path, sizeof( path ), "%s/%s", GI->gamefolder, dllname );
+			hInst->hInstance = UWP_LoadPackaged( path );
+		}
 
 		if( !hInst->hInstance )
 		{
-			Q_snprintf( buf, sizeof( buf ), "LoadPackagedLibrary( %s ): %s", pkgname, GetLastErrorAsString( ));
+			Q_snprintf( path, sizeof( path ), "%s/%s", XASH_GAMEDIR, dllname );
+			hInst->hInstance = UWP_LoadPackaged( path );
+		}
+
+		// 3. engine libraries sit at the package root
+		if( !hInst->hInstance )
+			hInst->hInstance = UWP_LoadPackaged( dllname );
+
+		if( !hInst->hInstance && Q_strcmp( COM_FileWithoutPath( dllname ), dllname ))
+			hInst->hInstance = UWP_LoadPackaged( COM_FileWithoutPath( dllname ));
+
+		if( !hInst->hInstance )
+		{
+			Q_snprintf( buf, sizeof( buf ), "%s is not in the app package: %s", dllname, GetLastErrorAsString( ));
 			COM_PushLibraryError( buf );
 			COM_FreeLibrary( hInst );
 			return NULL;

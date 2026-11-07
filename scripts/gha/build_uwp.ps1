@@ -19,6 +19,7 @@ $HlsdkBranch = if ($env:HLSDK_BRANCH) { $env:HLSDK_BRANCH } else { 'xbox' }
 $Publisher   = 'CN=HavocMasterChief'
 $RunNumber   = if ($env:GITHUB_RUN_NUMBER) { [int]$env:GITHUB_RUN_NUMBER } else { 0 }
 $Version     = "0.1.$RunNumber.0"
+$GameDir     = 'HalfLife' # base game folder, in LocalState and in the package
 
 function Step($name) { Write-Host ""; Write-Host "==================== $name ====================" }
 
@@ -75,7 +76,7 @@ Step 'Engine (waf, --enable-uwp)'
 $engineOut = Join-Path $Work 'engine-install'
 try {
 	Run "$Root\waf.bat" @('configure', '-s', $sdlSdk, '-T', 'release', '-8', '--enable-uwp',
-		'--uwp-store-libpath', $storeLib, '--disable-werror', '-o', (Join-Path $Work 'engine-build'))
+		'--uwp-store-libpath', $storeLib, '--disable-werror', '--gamedir', $GameDir, '-o', (Join-Path $Work 'engine-build'))
 } catch {
 	Write-Host '---------- tail of waf config.log ----------'
 	Get-Content (Join-Path $Work 'engine-build\config.log') -Tail 120 | ForEach-Object { Write-Host $_ }
@@ -134,14 +135,18 @@ Get-ChildItem $engineOut -Recurse -File | ForEach-Object {
 		Copy-Item $_.FullName $dest -Force
 	}
 }
-Get-ChildItem $hlsdkBuild -Recurse -Filter '*.dll' | Where-Object { $_.FullName -match '\\Release\\' } |
-	ForEach-Object { Copy-Item $_.FullName $Pkg -Force }
+# game libraries mirror the LocalState layout: <game>\dlls (server), <game>\cl_dlls (client)
+New-Item -ItemType Directory -Force -Path (Join-Path $Pkg "$GameDir\dlls"), (Join-Path $Pkg "$GameDir\cl_dlls") | Out-Null
+Get-ChildItem $hlsdkBuild -Recurse -Filter '*.dll' | Where-Object { $_.FullName -match '\\Release\\' } | ForEach-Object {
+	$sub = if ($_.Name -like 'client*') { 'cl_dlls' } else { 'dlls' }
+	Copy-Item $_.FullName (Join-Path $Pkg "$GameDir\$sub") -Force
+}
 
 Write-Host 'Package contents:'
 Get-ChildItem $Pkg -Recurse -File | ForEach-Object { Write-Host "  $($_.FullName.Substring($Pkg.Length + 1))  ($($_.Length) bytes)" }
 
 Step 'Imported DLLs (anything from user32/gdi32/etc. will not load on Xbox)'
-Get-ChildItem $Pkg -File | Where-Object { $_.Extension -in '.dll', '.exe' } | ForEach-Object {
+Get-ChildItem $Pkg -File -Recurse | Where-Object { $_.Extension -in '.dll', '.exe' } | ForEach-Object {
 	Write-Host "--- $($_.Name)"
 	& $dumpbin /nologo /dependents $_.FullName | Where-Object { $_ -match '\.dll' } | ForEach-Object { Write-Host "     $($_.Trim())" }
 }
