@@ -105,11 +105,18 @@ int main( int argc, char *argv[] )
 	static char argLog[] = "-log";
 	static char argRef[] = "-ref";
 	static char argRefName[] = "soft";
-	static char *engineArgs[] = { arg0, argDev, argDevLevel, argLog, argRef, argRefName, NULL };
+	// show the loading plaque instead of a full-screen console while maps load,
+	// and keep developer messages in engine.log only, not on screen
+	static char argLevelshots[] = "+allow_levelshots";
+	static char argOne[] = "1";
+	static char argNotify[] = "+con_notifytime";
+	static char argZero[] = "0";
+	static char *engineArgs[] = { arg0, argDev, argDevLevel, argLog, argRef, argRefName,
+		argLevelshots, argOne, argNotify, argZero, NULL };
 
 	(void)argc;
 	(void)argv;
 
 	// base game folder in LocalState (and in the package)
-	return Host_Main( 6, engineArgs, "HalfLife", 0, NULL );
+	return Host_Main( 10, engineArgs, "HalfLife", 0, NULL );
 }

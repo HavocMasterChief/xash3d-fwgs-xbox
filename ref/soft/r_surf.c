@@ -782,6 +782,14 @@ void R_InitCaches( void )
 			size += ( pix - 64000 ) * 3;
 	}
 
+#if XASH_UWP
+	// the cache is sized before the 1080p/4K window exists, which leaves it at
+	// 1.5 MB and makes textures flicker as surfaces evict each other every frame;
+	// Xbox has memory to spare, so never go below 32 MB
+	if( !sw_surfcacheoverride.value && size < 32 * 1024 * 1024 )
+		size = 32 * 1024 * 1024;
+#endif
+
 	// round up to page size
 	size = ( size + 8191 ) & ~8191;
 
