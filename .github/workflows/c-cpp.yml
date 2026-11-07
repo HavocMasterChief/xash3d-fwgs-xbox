@@ -1,5 +1,8 @@
 name: Build & Deploy Engine
-on: [push, pull_request]
+on:
+  push:
+    branches: [ master ]
+  pull_request:
 jobs:
 #  cleanup:
 #    runs-on: self-hosted

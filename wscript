@@ -181,6 +181,12 @@ def options(opt):
 	grp.add_option('--enable-dedicated', action = 'store_true', dest = 'ENABLE_DEDICATED', default = False,
 		help = 'enable building Xash Dedicated Server alongside client [default: %(default)s]')
 
+	grp.add_option('--enable-uwp', action = 'store_true', dest = 'UWP', default = False,
+		help = 'build for Universal Windows Platform / Xbox Series Dev Mode (MSVC only) [default: %(default)s]')
+
+	grp.add_option('--uwp-store-libpath', action = 'store', dest = 'UWP_STORE_LIBPATH', default = None,
+		help = 'path to MSVC lib/x64/store directory with app container CRT import libraries')
+
 	grp.add_option('--enable-tui', action = 'store_true', dest = 'ENABLE_TUI', default = False,
 		help = 'enable TUI main menu [default: %(default)s]')
 
@@ -370,6 +376,14 @@ def configure(conf):
 		conf.options.GL               = False
 		conf.options.LOW_MEMORY       = 1
 		enforce_pic = False
+	elif conf.options.UWP:
+		# Xbox Series Dev Mode: no OpenGL driver yet, start with the software renderer
+		conf.options.GL               = False
+		conf.options.SOFT             = True
+		conf.options.ENABLE_TUI       = False
+		conf.options.BUILD_BUNDLED_DEPS = True
+		conf.options.USE_STBTT        = True # mainui: no GDI fonts in app containers
+		conf.env.UWP = True
 	elif conf.env.MSVC_WINE:
 		conf.options.BUILD_BUNDLED_DEPS = True
 	elif conf.env.DEST_OS == 'ps4':
@@ -409,6 +423,18 @@ def configure(conf):
 		conf.force_32bit()
 
 	cflags, linkflags = conf.get_optimization_flags()
+
+	if conf.env.UWP:
+		if conf.env.COMPILER_CC != 'msvc':
+			conf.fatal('UWP build requires MSVC')
+		# app container binaries must use the dynamic store CRT, no XP toolset
+		cflags = ['/MD' if f == '/MT' else f for f in cflags if f != '/D_USING_V110_SDK71_']
+		cflags += ['/DWINAPI_FAMILY=WINAPI_FAMILY_APP', '/D_WIN32_WINNT=0x0A00', '/DXASH_UWP=1',
+			'/D_CRT_SECURE_NO_WARNINGS', '/D_WINSOCK_DEPRECATED_NO_WARNINGS']
+		linkflags += ['/APPCONTAINER']
+		if conf.options.UWP_STORE_LIBPATH:
+			linkflags += ['/LIBPATH:' + conf.options.UWP_STORE_LIBPATH]
+
 	cxxflags = list(cflags) # optimization flags are common between C and C++ but we need a copy
 
 	# on the Switch, allow undefined symbols by default, which is needed for libsolder to work
@@ -548,7 +574,7 @@ def configure(conf):
 	if not conf.options.DEDICATED:
 		conf.env.SERVER = conf.options.ENABLE_DEDICATED
 		conf.env.CLIENT = True
-		conf.env.LAUNCHER = conf.env.DEST_OS not in ['android', 'nswitch', 'psvita', 'ps4', 'dos', 'emscripten'] and not conf.env.IOS and not conf.env.MAGX and not conf.env.STATIC_LINKING
+		conf.env.LAUNCHER = conf.env.DEST_OS not in ['android', 'nswitch', 'psvita', 'ps4', 'dos', 'emscripten'] and not conf.env.IOS and not conf.env.MAGX and not conf.env.STATIC_LINKING and not conf.env.UWP
 	else:
 		conf.env.SERVER = True
 		conf.env.CLIENT = False
@@ -610,7 +636,11 @@ def configure(conf):
 		# Usually, they are always available
 		# but we need them in uselib
 		a = [ 'user32', 'shell32', 'gdi32', 'advapi32', 'dbghelp', 'psapi', 'ws2_32', 'bcrypt' ]
-		if conf.env.MSVC_WINE:
+		if conf.env.UWP:
+			# everything an app container may call lives in the WindowsApp umbrella library
+			for i in a:
+				conf.env['LIB_' + i.upper()] = ['WindowsApp']
+		elif conf.env.MSVC_WINE:
 			# no LIBPATH under msvc-wine, the wrapper resolves libraries itself
 			for i in a:
 				conf.env['LIB_' + i.upper()] = [i]

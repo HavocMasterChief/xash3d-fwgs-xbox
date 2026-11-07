@@ -340,6 +340,11 @@ static PIMAGE_IMPORT_DESCRIPTOR GetImportDescriptor( const byte *data, size_t si
 
 static void ListMissingModules( dll_user_t *hInst )
 {
+#if XASH_UWP
+	// app containers can't probe arbitrary modules, LoadPackagedLibrary error is all we get
+	(void)hInst;
+	return;
+#else
 	if( !hInst || !g_fsapi.LoadFile ) return;
 
 	fs_offset_t size = 0;
@@ -372,6 +377,7 @@ static void ListMissingModules( dll_user_t *hInst )
 
 	Mem_Free( data );
 	return;
+#endif // !XASH_UWP
 }
 
 qboolean Platform_CheckLibraryDirectDependency( const byte *data, size_t size, const char *depname )
@@ -382,7 +388,11 @@ qboolean Platform_CheckLibraryDirectDependency( const byte *data, size_t size, c
 	if( !importDesc )
 		return false;
 
+#if XASH_UWP
+	for( ; importDesc->Name; importDesc++ )
+#else
 	for( ; !IsBadReadPtr( importDesc, sizeof( IMAGE_IMPORT_DESCRIPTOR )) && importDesc->Name; importDesc++ )
+#endif
 	{
 		const char *importName = (const char *)CALCULATE_ADDRESS( data, GetOffsetByRVA( importDesc->Name, peHeader ));
 
@@ -407,6 +417,37 @@ void *COM_LoadLibrary( const char *dllname, int build_ordinals_table, qboolean d
 	COM_ResetLibraryError();
 
 	dll_user_t *hInst = FS_FindLibrary( dllname, directpath );
+
+#if XASH_UWP
+	// UWP can only load DLLs that ship inside the app package, and only by
+	// package-relative name. Game data (and the original x86 DLLs) live in
+	// LocalState, so whatever the filesystem found, load the packaged copy
+	// with the same file name instead.
+	if( !hInst )
+	{
+		hInst = Mem_Calloc( host.mempool, sizeof( dll_user_t ));
+		Q_strncpy( hInst->shortPath, dllname, sizeof( hInst->shortPath ));
+		Q_strncpy( hInst->fullPath, dllname, sizeof( hInst->fullPath ));
+		Q_strncpy( hInst->dllName, dllname, sizeof( hInst->dllName ));
+	}
+
+	{
+		char pkgname[MAX_OSPATH];
+
+		Q_strncpy( pkgname, COM_FileWithoutPath( hInst->fullPath ), sizeof( pkgname ));
+		COM_DefaultExtension( pkgname, ".dll", sizeof( pkgname ));
+
+		hInst->hInstance = LoadPackagedLibrary( FS_PathToWideChar( pkgname ), 0 );
+
+		if( !hInst->hInstance )
+		{
+			Q_snprintf( buf, sizeof( buf ), "LoadPackagedLibrary( %s ): %s", pkgname, GetLastErrorAsString( ));
+			COM_PushLibraryError( buf );
+			COM_FreeLibrary( hInst );
+			return NULL;
+		}
+	}
+#else
 	if( !hInst )
 	{
 		Q_snprintf( buf, sizeof( buf ), "Failed to find library %s", dllname );
@@ -443,6 +484,7 @@ void *COM_LoadLibrary( const char *dllname, int build_ordinals_table, qboolean d
 		COM_FreeLibrary( hInst );
 		return NULL;
 	}
+#endif // !XASH_UWP
 
 	// if not set - FunctionFromName and NameForFunction will not working
 	if( build_ordinals_table )
@@ -476,12 +518,26 @@ void *COM_GetProcAddress( void *hInstance, const char *name )
 void *COM_GetProcAddressFromDependency( void *hInstance, const char *depname, const char *name )
 {
 	// GetProcAddress doesn't follow imports, but a loaded dependency is a module of its own
+#if XASH_UWP
+	// no GetModuleHandle in app containers: take and drop a reference instead,
+	// the dependency stays loaded because the dependent module holds it
+	HMODULE hMod = LoadPackagedLibrary( FS_PathToWideChar( depname ), 0 );
+	void *proc;
+
+	if( !hMod )
+		return NULL;
+
+	proc = (void *)GetProcAddress( hMod, name );
+	FreeLibrary( hMod );
+	return proc;
+#else
 	HMODULE hMod = GetModuleHandleA( depname );
 
 	if( !hMod )
 		return NULL;
 
 	return (void *)GetProcAddress( hMod, name );
+#endif
 }
 
 void COM_FreeLibrary( void *hInstance )
