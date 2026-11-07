@@ -93,7 +93,7 @@ qboolean SNDDMA_Init( void )
 	// Also, fun note, GoldSrc seems doesn't use SDL2 for sound stuff at all, as nothing
 	// reference SDL audio functions there. It's probably has DirectSound backend, that's
 	// why modders never stumble upon this bug.
-#if XASH_WIN32
+#if XASH_WIN32 && !XASH_UWP // UWP has no DirectSound, SDL picks WASAPI on its own
 	const char *driver = "directsound";
 
 	if( SDL_getenv( "SDL_AUDIODRIVER" ))
