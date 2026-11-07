@@ -27,11 +27,17 @@ The app reads game data from its **LocalState** folder.
 
 1. In Device Portal open **File explorer → LocalAppData →
    HavocMasterChief.Xash3DXbox_… → LocalState**.
-2. Upload your **`valve`** folder from your Steam install
-   (`Steam\steamapps\common\Half-Life\valve`), keeping the folder structure.
-   Device Portal uploads files, not folders, so recreate the subfolders
-   (`maps`, `models`, `sound`, `sprites`, `gfx`, …) and upload into each, or
-   use a tool like `XboxDevModeFileManager` / an FTP app.
+2. Device Portal uploads single files, not folders, and the `valve` folder has
+   thousands of them. Pack it into one archive instead:
+   1. On your PC, open `Steam\steamapps\common\Half-Life\valve`.
+   2. Select **everything inside it** (not the folder itself) and zip it
+      (right-click → *Compress to ZIP file*).
+   3. Rename the zip to **`hl_content.pk3`** (Xash3D reads zip files named `.pk3`
+      straight from the game folder).
+3. In **LocalState**, create a folder named **`valve`** and upload into it:
+   - `hl_content.pk3`
+   - `liblist.gam` (copy it loose from the Steam `valve` folder too, the engine
+     looks for it before opening any archives)
 
 ## Run and report back
 
