@@ -139,7 +139,7 @@ SUBDIRS = [
 	# on platforms supported only by Xash3D FWGS, freevgui can be linked statically into client library
 	Subproject('3rdparty/freevgui',     lambda x: x.env.CLIENT and x.env.DEST_OS in ['win32', 'linux', 'darwin'] and x.env.DEST_CPU == 'x86'),
 
-	Subproject('3rdparty/MultiEmulator',lambda x: x.env.CLIENT),
+	Subproject('3rdparty/MultiEmulator',lambda x: x.env.CLIENT and not x.env.UWP),
 	Subproject('stub/client',           lambda x: x.env.CLIENT),
 	Subproject('game_launch',           lambda x: x.env.LAUNCHER and not x.env.SAILFISH),
 	Subproject('sailfish',              lambda x: x.env.CLIENT and x.env.SAILFISH),

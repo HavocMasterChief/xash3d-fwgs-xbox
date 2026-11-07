@@ -298,7 +298,9 @@ def build(bld):
 		# add client files
 		if not bld.env.DEDICATED:
 			source += bld.path.ant_glob('client/**/*.c')
-			libs += ['bzip2', 'mpg123', 'MultiEmulator', 'opus', 'opusfile', 'vorbis', 'vorbisfile']
+			libs += ['bzip2', 'mpg123', 'opus', 'opusfile', 'vorbis', 'vorbisfile']
+			if not bld.env.UWP: # Steam ticket emulator, left out of the Xbox build
+				libs += ['MultiEmulator']
 
 			if bld.env.SAILFISH:
 				source += bld.path.ant_glob('platform/sailfish/*.c')

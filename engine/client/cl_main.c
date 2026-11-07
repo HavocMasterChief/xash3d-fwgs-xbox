@@ -23,7 +23,9 @@ GNU General Public License for more details.
 #include "library.h"
 #include "vid_common.h"
 #include "pm_local.h"
+#if !XASH_UWP
 #include "multi_emulator.h"
+#endif
 
 #define CL_CONNECTION_TIMEOUT 15.0f
 #define CL_CONNECTION_RETRIES 5
@@ -1185,12 +1187,19 @@ static void CL_WriteSteamTicket( sizebuf_t *send )
 	char buf[768] = { 0 }; // setti and steamemu return 768
 	int i = sizeof( buf );
 
+#if XASH_UWP
+	// Xbox build ships without the Steam ticket emulator (antivirus flags it,
+	// and it's only needed to join GoldSrc servers), always send an empty ticket
+	if( true )
+#else
 	if( !Q_strcmp( cl_ticket_generator.string, "null" ))
+#endif
 	{
 		MSG_WriteBytes( send, buf, 512 ); // specifically 512 bytes of zeros
 		return;
 	}
 
+#if !XASH_UWP
 	ID_GetMD5ForAddress( key, adr, sizeof( key ));
 	CRC32_Init( &crc );
 	CRC32_ProcessBuffer( &crc, key, Q_strlen( key ));
@@ -1201,6 +1210,9 @@ static void CL_WriteSteamTicket( sizebuf_t *send )
 	// RevEmu2013: pTicket[1] = revHash (low), pTicket[5] = 0x01100001 (high)
 	*(uint32_t*)cls.steamid = LittleLong( ((uint32_t*)buf)[1] );
 	*(uint32_t*)(cls.steamid + 4) = LittleLong( ((uint32_t*)buf)[5] );
+#else
+	(void)key; (void)adr; (void)crc; (void)i;
+#endif
 }
 
 void CL_SendGoldSrcConnectPacket( netadr_t adr, int challenge, const void *ticket, size_t ticketlen )
