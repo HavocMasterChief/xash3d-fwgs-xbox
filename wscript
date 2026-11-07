@@ -377,8 +377,10 @@ def configure(conf):
 		conf.options.LOW_MEMORY       = 1
 		enforce_pic = False
 	elif conf.options.UWP:
-		# Xbox Series Dev Mode: no OpenGL driver yet, start with the software renderer
+		# Xbox Series Dev Mode: no desktop OpenGL in app containers. Render through
+		# OpenGL ES 3 on ANGLE (Direct3D 11), keep the software renderer as fallback
 		conf.options.GL               = False
+		conf.options.GLES3COMPAT      = True
 		conf.options.SOFT             = True
 		conf.options.ENABLE_TUI       = False
 		conf.options.BUILD_BUNDLED_DEPS = True

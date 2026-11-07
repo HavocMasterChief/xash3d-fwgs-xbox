@@ -20,6 +20,8 @@ $Publisher   = 'CN=HavocMasterChief'
 $RunNumber   = if ($env:GITHUB_RUN_NUMBER) { [int]$env:GITHUB_RUN_NUMBER } else { 0 }
 $Version     = "0.1.$RunNumber.0"
 $GameDir     = 'HalfLife' # base game folder, in LocalState and in the package
+$AnglePackage = 'ANGLE.WindowsStore'
+$AngleVersion = '2.1.13'
 
 function Step($name) { Write-Host ""; Write-Host "==================== $name ====================" }
 
@@ -70,6 +72,22 @@ $sdlSdk = Join-Path $Work 'SDL2_UWP'
 New-Item -ItemType Directory -Force -Path (Join-Path $sdlSdk 'include'), (Join-Path $sdlSdk 'lib\x64') | Out-Null
 Copy-Item (Join-Path $sdlSrc 'include\*') (Join-Path $sdlSdk 'include') -Recurse -Force
 Copy-Item $sdlLib.FullName, $sdlDll.FullName (Join-Path $sdlSdk 'lib\x64') -Force
+
+# ---------------------------------------------------------------------------
+Step "ANGLE $AngleVersion (OpenGL ES over Direct3D 11, the GL driver SDL2 uses on UWP)"
+$angleZip = Join-Path $Work 'angle.zip'
+$angleDir = Join-Path $Work 'angle'
+if (-not (Test-Path $angleDir)) {
+	Invoke-WebRequest "https://www.nuget.org/api/v2/package/$AnglePackage/$AngleVersion" -OutFile $angleZip
+	Expand-Archive $angleZip $angleDir -Force
+}
+$angleDlls = Get-ChildItem $angleDir -Recurse -Include 'libEGL.dll', 'libGLESv2.dll' |
+	Where-Object { $_.FullName -match 'UAP' -and $_.FullName -match 'x64' }
+if (@($angleDlls).Count -lt 2) {
+	Get-ChildItem $angleDir -Recurse -Filter '*.dll' | ForEach-Object { Write-Host "  $($_.FullName)" }
+	throw 'ANGLE package has no UAP x64 libEGL.dll/libGLESv2.dll'
+}
+$angleDlls | ForEach-Object { Write-Host "ANGLE: $($_.FullName)" }
 
 # ---------------------------------------------------------------------------
 Step 'Engine (waf, --enable-uwp)'
@@ -129,6 +147,7 @@ Copy-Item (Join-Path $Root 'uwp\package\Assets') $Pkg -Recurse
 
 Copy-Item $hostExe.FullName $Pkg
 Copy-Item $sdlDll.FullName $Pkg
+$angleDlls | ForEach-Object { Copy-Item $_.FullName $Pkg -Force }
 
 # every DLL the engine install produced goes to the package root, where
 # LoadPackagedLibrary looks for it; game data dirs (valve/extras.pk3) keep their layout

@@ -2,7 +2,7 @@ name: Xbox Series (UWP) build
 
 on:
   push:
-    branches: [ xbox ]
+    branches: [ xbox, 'xbox-*' ]
   workflow_dispatch:
 
 permissions:
@@ -49,11 +49,13 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        gh release delete xbox-latest --yes --cleanup-tag 2>/dev/null || true
-        gh release create xbox-latest artifacts/Xash3DXbox-x64.zip \
+        # xbox -> xbox-latest; experimental branches (xbox-gl, ...) get their own release
+        TAG="${GITHUB_REF_NAME}-latest"
+        gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+        gh release create "$TAG" artifacts/Xash3DXbox-x64.zip \
           --target "$GITHUB_SHA" --prerelease \
-          --title "Xbox Series Dev Mode build #$GITHUB_RUN_NUMBER" \
-          --notes "Automatic build of the xbox branch at $GITHUB_SHA. See README-XBOX.md inside the zip for install steps."
+          --title "Xbox Series Dev Mode build #$GITHUB_RUN_NUMBER ($GITHUB_REF_NAME)" \
+          --notes "Automatic build of the $GITHUB_REF_NAME branch at $GITHUB_SHA. See README-XBOX.md inside the zip for install steps."
 
     # Build logs go to the ci-logs branch so they can be read without
     # access to the Actions UI. The branch only ever holds the latest run.

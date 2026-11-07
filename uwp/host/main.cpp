@@ -98,13 +98,15 @@ int main( int argc, char *argv[] )
 		return 1;
 	}
 
-	// first boot: software renderer, developer console messages, engine.log in LocalState
+	// OpenGL ES 3 over ANGLE (libEGL/libGLESv2 in the package); if it can't start,
+	// the engine falls back to the software renderer on its own.
+	// Developer messages go to engine.log in LocalState.
 	static char arg0[] = "xash3d";
 	static char argDev[] = "-dev";
 	static char argDevLevel[] = "2";
 	static char argLog[] = "-log";
 	static char argRef[] = "-ref";
-	static char argRefName[] = "soft";
+	static char argRefName[] = "gles3compat";
 	// show the loading plaque instead of a full-screen console while maps load,
 	// and keep developer messages in engine.log only, not on screen
 	static char argLevelshots[] = "+allow_levelshots";
