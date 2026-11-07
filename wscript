@@ -431,7 +431,7 @@ def configure(conf):
 		cflags = ['/MD' if f == '/MT' else f for f in cflags if f != '/D_USING_V110_SDK71_']
 		cflags += ['/DWINAPI_FAMILY=WINAPI_FAMILY_APP', '/D_WIN32_WINNT=0x0A00', '/DXASH_UWP=1',
 			'/D_CRT_SECURE_NO_WARNINGS', '/D_WINSOCK_DEPRECATED_NO_WARNINGS']
-		linkflags += ['/APPCONTAINER']
+		linkflags += ['/APPCONTAINER', 'WindowsApp.lib']
 		if conf.options.UWP_STORE_LIBPATH:
 			linkflags += ['/LIBPATH:' + conf.options.UWP_STORE_LIBPATH]
 

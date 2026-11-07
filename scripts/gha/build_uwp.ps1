@@ -73,8 +73,14 @@ Copy-Item $sdlLib.FullName, $sdlDll.FullName (Join-Path $sdlSdk 'lib\x64') -Forc
 # ---------------------------------------------------------------------------
 Step 'Engine (waf, --enable-uwp)'
 $engineOut = Join-Path $Work 'engine-install'
-Run "$Root\waf.bat" @('configure', '-s', $sdlSdk, '-T', 'release', '-8', '--enable-uwp',
-	'--uwp-store-libpath', $storeLib, '--disable-werror', '-o', (Join-Path $Work 'engine-build'))
+try {
+	Run "$Root\waf.bat" @('configure', '-s', $sdlSdk, '-T', 'release', '-8', '--enable-uwp',
+		'--uwp-store-libpath', $storeLib, '--disable-werror', '-o', (Join-Path $Work 'engine-build'))
+} catch {
+	Write-Host '---------- tail of waf config.log ----------'
+	Get-Content (Join-Path $Work 'engine-build\config.log') -Tail 120 | ForEach-Object { Write-Host $_ }
+	throw
+}
 Run "$Root\waf.bat" @('build', '-k')
 Run "$Root\waf.bat" @('install', "--destdir=$engineOut")
 
