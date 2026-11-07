@@ -1136,6 +1136,8 @@ void Joy_AutoPreset( void )
 			{ K_DPAD_LEFT,   "savequick",   "+xbdpadleft" },
 			{ K_DPAD_RIGHT,  "lastinv",     "+xbdpadright" },
 			{ K_L1_BUTTON,   "invprev",     "+xbwheel" },
+			{ K_R1_BUTTON,   "invnext",     "impulse 100" }, // flashlight
+			{ K_RSTICK,      "impulse 100", "xbkick" },
 		};
 
 		for( size_t i = 0; i < ARRAYSIZE( migrate ); i++ )
