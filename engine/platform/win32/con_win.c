@@ -16,6 +16,24 @@ GNU General Public License for more details.
 #include "common.h"
 #include "xash3d_mathlib.h"
 
+#if XASH_UWP
+/*
+===============================================================================
+
+UWP: no console windows in an app container, route output to the debugger
+
+===============================================================================
+*/
+void Wcon_ShowConsole( qboolean show ) { (void)show; }
+void Wcon_DisableInput( void ) { }
+void Wcon_WinPrint( const char *pMsg ) { OutputDebugStringA( pMsg ); }
+void Wcon_CreateConsole( qboolean con_showalways ) { (void)con_showalways; }
+void Wcon_InitConsoleCommands( void ) { }
+void Wcon_DestroyConsole( void ) { }
+char *Wcon_Input( void ) { return NULL; }
+void Platform_SetStatus( const char *pStatus ) { (void)pStatus; }
+#else // !XASH_UWP
+
 /*
 ===============================================================================
 
@@ -660,3 +678,4 @@ void Platform_SetStatus( const char *pStatus )
 	s_wcd.statusLine[sizeof( s_wcd.statusLine ) - 2] = '\0';
 	Wcon_UpdateStatusLine();
 }
+#endif // !XASH_UWP

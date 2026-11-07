@@ -311,7 +311,7 @@ static qboolean FS_DetermineRootDirectory( char *out, size_t size )
 		return true;
 	}
 
-#if XASH_POSIX || XASH_WIN32
+#if XASH_POSIX || ( XASH_WIN32 && !XASH_UWP )
 	if( getcwd( out, size ))
 		return true;
 	Sys_Error( "couldn't determine current directory: %s, getcwd: %s", SDL_GetError(), strerror( errno ));

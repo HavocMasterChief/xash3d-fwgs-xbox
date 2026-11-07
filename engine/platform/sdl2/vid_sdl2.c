@@ -305,7 +305,7 @@ static void R_FreeVideoModes( void )
 	vidmodes = NULL;
 }
 
-#if XASH_WIN32
+#if XASH_WIN32 && !XASH_UWP
 static qboolean WIN_SetWindowIcon( HICON ico )
 {
 	SDL_SysWMinfo wminfo;
@@ -475,7 +475,7 @@ static void VID_SetWindowIcon( SDL_Window *hWnd )
 	}
 
 	// ICO support only for Win32
-#if XASH_WIN32
+#if XASH_WIN32 && !XASH_UWP
 	const char *disk_iconpath = FS_GetDiskPath( GI->iconpath, true );
 
 	if( disk_iconpath )
@@ -516,7 +516,7 @@ static qboolean VID_GetDisplayBounds( int display_index, SDL_Window *hWnd, SDL_R
 	}
 	else
 	{
-#if XASH_WIN32
+#if XASH_WIN32 && !XASH_UWP
 		wrc.left = GetSystemMetrics( SM_CYSIZEFRAME );
 		wrc.right = wrc.bottom = wrc.left;
 		wrc.top = GetSystemMetrics( SM_CYSMCAPTION ) + wrc.left;

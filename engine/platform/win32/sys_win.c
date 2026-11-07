@@ -127,7 +127,11 @@ qboolean Platform_DebuggerPresent( void )
 
 void Platform_ShellExecute( const char *path, const char *parms )
 {
+#if XASH_UWP
+	(void)path; (void)parms; // no shell to hand URLs or files to
+#else
 	ShellExecuteA( NULL, "open", path, parms, NULL, SW_SHOW );
+#endif
 }
 
 #if XASH_MESSAGEBOX == MSGBOX_WIN32

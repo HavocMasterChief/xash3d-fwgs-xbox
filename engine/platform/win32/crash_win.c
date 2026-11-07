@@ -16,6 +16,12 @@ GNU General Public License for more details.
 #include "platform/platform.h"
 #include "input.h"
 
+#if XASH_UWP
+// UWP: no dbghelp or process-wide exception filters in an app container
+void Sys_SetupCrashHandler( const char *argv0 ) { (void)argv0; }
+void Sys_RestoreCrashHandler( void ) { }
+#else // !XASH_UWP
+
 #define DBGHELP 1 // we always enable dbghelp.dll on Windows targets
 
 #if XASH_SDL
@@ -337,3 +343,4 @@ void Sys_RestoreCrashHandler( void )
 	// restore filter
 	if( oldFilter ) SetUnhandledExceptionFilter( oldFilter );
 }
+#endif // !XASH_UWP
