@@ -57,6 +57,15 @@ int main( int argc, char *argv[] )
 		return 1;
 	}
 
+	// -log overwrites engine.log on every launch; keep the previous run's log
+	// so a crash can still be read after the app is reopened
+	{
+		std::string log = std::string( localState ) + "\\engine.log";
+		std::string prev = std::string( localState ) + "\\engine_prev.log";
+		remove( prev.c_str( ));
+		rename( log.c_str( ), prev.c_str( ));
+	}
+
 	std::string basedir = std::string( "XASH3D_BASEDIR=" ) + localState;
 	_putenv( basedir.c_str( ));
 
