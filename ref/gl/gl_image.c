@@ -830,6 +830,32 @@ static void GL_BuildMipMap( byte *in, int srcWidth, int srcHeight, int srcDepth,
 	}
 }
 
+#if XASH_GLES3COMPAT
+/*
+===============
+GL_UploadFormat
+
+OpenGL ES 2.0 has no sized internal formats (GL_RGBA8...), the internal
+format must equal the data format or the upload fails with GL_INVALID_VALUE
+(every world texture renders black). ES 3.0 and desktop GL take them as-is.
+===============
+*/
+static GLint GL_UploadFormat( GLint internalFormat, GLenum inFormat )
+{
+	static int is_es2 = -1;
+
+	if( is_es2 < 0 )
+	{
+		const char *ver = (const char *)pglGetString( GL_VERSION );
+		is_es2 = ver && Q_strstr( ver, "OpenGL ES 2" ) ? 1 : 0;
+	}
+
+	return is_es2 ? (GLint)inFormat : internalFormat;
+}
+#else
+#define GL_UploadFormat( internalFormat, inFormat ) ( internalFormat )
+#endif
+
 static void GL_TextureImageRAW( gl_texture_t *tex, GLint side, GLint level, GLint width, GLint height, GLint depth, GLint type, const void *data )
 {
 	const GLuint cubeTarget = GL_TEXTURE_CUBE_MAP_POSITIVE_X_ARB;
@@ -876,7 +902,7 @@ static void GL_TextureImageRAW( gl_texture_t *tex, GLint side, GLint level, GLin
 	else if( tex->target == GL_TEXTURE_CUBE_MAP_ARB )
 	{
 		if( subImage ) pglTexSubImage2D( cubeTarget + side, level, 0, 0, width, height, inFormat, dataType, data );
-		else pglTexImage2D( cubeTarget + side, level, tex->format, width, height, 0, inFormat, dataType, data );
+		else pglTexImage2D( cubeTarget + side, level, GL_UploadFormat( tex->format, inFormat ), width, height, 0, inFormat, dataType, data );
 	}
 	else if( tex->target == GL_TEXTURE_3D || tex->target == GL_TEXTURE_2D_ARRAY_EXT )
 	{
@@ -905,7 +931,7 @@ static void GL_TextureImageRAW( gl_texture_t *tex, GLint side, GLint level, GLin
 	else // 2D or RECT
 	{
 		if( subImage ) pglTexSubImage2D( tex->target, level, 0, 0, width, height, inFormat, dataType, data );
-		else pglTexImage2D( tex->target, level, tex->format, width, height, 0, inFormat, dataType, data );
+		else pglTexImage2D( tex->target, level, GL_UploadFormat( tex->format, inFormat ), width, height, 0, inFormat, dataType, data );
 	}
 }
 

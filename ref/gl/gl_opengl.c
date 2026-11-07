@@ -1467,6 +1467,11 @@ void GL_SetupAttributes( int safegl )
 #if XASH_NANOGL
 	gEngfuncs.GL_SetAttribute( REF_GL_CONTEXT_MAJOR_VERSION, 1 );
 	gEngfuncs.GL_SetAttribute( REF_GL_CONTEXT_MINOR_VERSION, 1 );
+#elif XASH_UWP && XASH_GLES3COMPAT
+	// ANGLE creates exactly the version asked for (Android drivers hand out the
+	// newest one), so ask for ES 3.0 and only drop to 2.0 in safe mode
+	gEngfuncs.GL_SetAttribute( REF_GL_CONTEXT_MAJOR_VERSION, safegl ? 2 : 3 );
+	gEngfuncs.GL_SetAttribute( REF_GL_CONTEXT_MINOR_VERSION, 0 );
 #else // !XASH_NANOGL
 	gEngfuncs.GL_SetAttribute( REF_GL_CONTEXT_MAJOR_VERSION, 2 );
 	gEngfuncs.GL_SetAttribute( REF_GL_CONTEXT_MINOR_VERSION, 0 );
