@@ -2214,6 +2214,12 @@ static void Con_DrawNotify( void )
 	double	time = cl.time;
 	int	y = 0;
 
+#if XASH_UWP
+	// Xbox build runs with -dev 2 for engine.log; keep that spew off the TV
+	// (con_notifytime from the command line loses to the saved config)
+	return;
+#endif
+
 	if( !con.curFont ) return;
 
 	int x = con.curFont->charWidths[' ']; // offset one space at left screen side
