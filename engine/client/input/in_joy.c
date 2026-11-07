@@ -76,6 +76,32 @@ static CVAR_DEFINE_AUTO( joy_look_deadzone, "0.15", FCVAR_ARCHIVE | FCVAR_FILTER
 static CVAR_DEFINE_AUTO( joy_quickturn, "1", FCVAR_ARCHIVE | FCVAR_FILTERABLE, "speed up turning after holding the look stick fully sideways" );
 static CVAR_DEFINE_AUTO( joy_invert, "0", FCVAR_ARCHIVE | FCVAR_FILTERABLE, "invert gamepad look up/down" );
 static CVAR_DEFINE_AUTO( joy_aimassist, "2", FCVAR_ARCHIVE | FCVAR_FILTERABLE, "gamepad aim assist: 0 off, 1 low, 2 medium, 3 high" );
+static CVAR_DEFINE_AUTO( joy_crouch_toggle, "0", FCVAR_ARCHIVE | FCVAR_FILTERABLE, "crouch button (+xbcrouch) toggles instead of hold" );
+
+static qboolean xb_crouched;
+
+static void Joy_XbCrouchDown_f( void )
+{
+	if( joy_crouch_toggle.value )
+	{
+		xb_crouched = !xb_crouched;
+		Cbuf_AddText( xb_crouched ? "+duck\n" : "-duck\n" );
+	}
+	else
+	{
+		xb_crouched = true;
+		Cbuf_AddText( "+duck\n" );
+	}
+}
+
+static void Joy_XbCrouchUp_f( void )
+{
+	if( !joy_crouch_toggle.value )
+	{
+		xb_crouched = false;
+		Cbuf_AddText( "-duck\n" );
+	}
+}
 #else
 static CVAR_DEFINE_AUTO( joy_pitch,   "100.0", FCVAR_ARCHIVE | FCVAR_FILTERABLE, "joystick pitch sensitivity" );
 static CVAR_DEFINE_AUTO( joy_yaw,     "100.0", FCVAR_ARCHIVE | FCVAR_FILTERABLE, "joystick yaw sensitivity" );
@@ -1029,6 +1055,17 @@ void Joy_AutoPreset( void )
 	if( s_tried || !joy_initialized || !host.config_executed || !Joy_IsActive( ))
 		return;
 
+#if XASH_UWP
+	// configs saved by earlier Xbox builds bind B straight to +duck,
+	// move it to +xbcrouch so the toggle crouch option works
+	{
+		const char *b = Key_GetBinding( K_B_BUTTON );
+
+		if( b && !Q_stricmp( b, "+duck" ))
+			Key_SetBinding( K_B_BUTTON, "+xbcrouch" );
+	}
+#endif
+
 	// only pick once, user changes it from the menu afterwards
 	if( COM_StringEmptyOrNULL( joy_suggested_preset ) || !COM_StringEmptyOrNULL( joy_preset.string ))
 		return;
@@ -1093,6 +1130,9 @@ void Joy_Init( void )
 	Cvar_RegisterVariable( &joy_quickturn );
 	Cvar_RegisterVariable( &joy_invert );
 	Cvar_RegisterVariable( &joy_aimassist );
+	Cvar_RegisterVariable( &joy_crouch_toggle );
+	Cmd_AddCommand( "+xbcrouch", Joy_XbCrouchDown_f, "crouch, held or toggled (joy_crouch_toggle)" );
+	Cmd_AddCommand( "-xbcrouch", Joy_XbCrouchUp_f, "release crouch when not toggled" );
 #endif
 	Cvar_RegisterVariable( &joy_side );
 	Cvar_RegisterVariable( &joy_forward );

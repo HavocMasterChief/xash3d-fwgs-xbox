@@ -68,7 +68,7 @@ float AimAssist_FindTarget( const vec3_t viewangles, float *dyaw, float *dpitch 
 	if( !SV_Active( ) || svs.maxclients != 1 || !svgame.edicts )
 		return 0.0f;
 
-	player = EDICT_NUM( 1 );
+	player = SV_EdictNum( 1 );
 	if( !SV_IsValidEdict( player ) || player->v.health <= 0 )
 		return 0.0f;
 
@@ -76,12 +76,12 @@ float AimAssist_FindTarget( const vec3_t viewangles, float *dyaw, float *dpitch 
 
 	for( i = svs.maxclients + 1; i < svgame.numEntities; i++ )
 	{
-		edict_t *ent = EDICT_NUM( i );
+		edict_t *ent = SV_EdictNum( i );
 		vec3_t chest, dir;
 		float dist, horiz, yaw, pitch, ey, ep, err, cone, strength;
 		trace_t tr;
 
-		if( ent->free || ent->v.iuser4 != AIMASSIST_HOSTILE )
+		if( !ent || ent->free || ent->v.iuser4 != AIMASSIST_HOSTILE )
 			continue;
 
 		if( !FBitSet( ent->v.flags, FL_MONSTER ) || ent->v.deadflag != DEAD_NO || ent->v.health <= 0 || ent->v.takedamage == DAMAGE_NO )

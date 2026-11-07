@@ -142,6 +142,8 @@ if (Test-Path $Pkg) { Remove-Item $Pkg -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $Pkg | Out-Null
 
 Copy-Item (Join-Path $Root 'uwp\package\Assets') $Pkg -Recurse
+# Xbox-specific game files (controller preset, controller picture...), read-only in the package
+Copy-Item (Join-Path $Root 'uwp\package\HalfLife') $Pkg -Recurse -Force
 (Get-Content (Join-Path $Root 'uwp\package\AppxManifest.xml') -Raw).Replace('@VERSION@', $Version) |
 	Set-Content (Join-Path $Pkg 'AppxManifest.xml') -Encoding UTF8
 

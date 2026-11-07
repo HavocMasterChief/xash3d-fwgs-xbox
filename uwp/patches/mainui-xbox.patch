@@ -1,3 +1,57 @@
+diff --git a/menus/Audio.cpp b/menus/Audio.cpp
+index 152fb47..2603c4a 100644
+--- a/menus/Audio.cpp
++++ b/menus/Audio.cpp
+@@ -166,7 +166,9 @@ void CMenuAudio::_Init( void )
+ 	AddItem( suitVolume );
+ 	AddItem( noDSP );
+ 	AddItem( useAlphaDSP );
++#if !XASH_UWP // the game is always in focus on Xbox
+ 	AddItem( muteFocusLost );
++#endif
+ 	AddItem( vibrationEnable );
+ 	AddItem( vibration );
+ }
+diff --git a/menus/Configuration.cpp b/menus/Configuration.cpp
+index 6e0a981..712272c 100644
+--- a/menus/Configuration.cpp
++++ b/menus/Configuration.cpp
+@@ -27,6 +27,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+ 
+ #define ART_BANNER	     	"gfx/shell/head_config"
+ 
++#if XASH_UWP
++void UI_XboxController_Menu( void );
++#endif
++
+ class CMenuOptions: public CMenuFramework
+ {
+ private:
+@@ -55,6 +59,16 @@ void CMenuOptions::_Init( void )
+ 	msgBox.Link( this );
+ 
+ 	AddItem( banner );
++#if XASH_UWP
++	// Xbox: controller, audio and picture only. No keyboard/mouse, touch,
++	// raw gamepad axis mapping, video modes or online update check.
++	AddButton( L( "Controller" ), L( "Controller layout, look sensitivity and aim assist" ),
++		PC_CONTROLS, UI_XboxController_Menu, QMF_NOTIFY );
++	AddButton( L( "GameUI_Audio" ), L( "Change sound volume and quality" ),
++		PC_AUDIO, UI_Audio_Menu, QMF_NOTIFY );
++	AddButton( L( "GameUI_Video" ), L( "Change screen size, gamma and image quality" ),
++		PC_VIDEO, UI_VidOptions_Menu, QMF_NOTIFY );
++#else
+ 	AddButton( L( "Controls" ), L( "Change keyboard and mouse settings" ),
+ 		PC_CONTROLS, UI_Controls_Menu, QMF_NOTIFY );
+ 	AddButton( L( "GameUI_Audio" ), L( "Change sound volume and quality" ),
+@@ -67,6 +81,7 @@ void CMenuOptions::_Init( void )
+ 		PC_GAMEPAD, UI_GamePad_Menu, QMF_NOTIFY, 'g' );
+ 	AddButton( L( "Update" ), L( "Check for updates" ),
+ 		PC_UPDATE, msgBox.MakeOpenEvent(), QMF_NOTIFY );
++#endif
+ 	AddButton( L( "Done" ), L( "Go back to the Main menu" ),
+ 		PC_DONE, VoidCb( &CMenuOptions::Hide ), QMF_NOTIFY );
+ }
 diff --git a/menus/Main.cpp b/menus/Main.cpp
 index 4d1a382..efd0857 100644
 --- a/menus/Main.cpp
@@ -46,3 +100,156 @@ index 4d1a382..efd0857 100644
  
  	bool single = gpGlobals->maxClients < 2;
  
+diff --git a/menus/VideoOptions.cpp b/menus/VideoOptions.cpp
+index 69dd50a..cb6e333 100644
+--- a/menus/VideoOptions.cpp
++++ b/menus/VideoOptions.cpp
+@@ -278,12 +278,16 @@ void CMenuVidOptions::_Init( void )
+ 	AddItem( gammaIntensity );
+ 	AddItem( brightness );
+ 	AddItem( detailtex );
++#if !XASH_UWP // Xbox: world VBO is glitchy, software water and the test image don't apply
+ 	AddItem( vbo );
+ 	AddItem( swwater );
++#endif
+ 	AddItem( overbright );
+ 	AddItem( filtering );
+ 	AddItem( hudscale );
++#if !XASH_UWP
+ 	AddItem( testImage );
++#endif
+ 
+ #if LEGACY_VIEWSIZE
+ 	screenSize.LinkCvar( "viewsize" );
+diff --git a/menus/XboxController.cpp b/menus/XboxController.cpp
+new file mode 100644
+index 0000000..eba303f
+--- /dev/null
++++ b/menus/XboxController.cpp
+@@ -0,0 +1,126 @@
++/*
++XboxController.cpp - controller settings menu for the Xbox build
++Copyright (C) 2026 HavocMasterChief
++
++This program is free software; you can redistribute it and/or
++modify it under the terms of the GNU General Public License
++as published by the Free Software Foundation; either version 2
++of the License, or (at your option) any later version.
++
++This program is distributed in the hope that it will be useful,
++but WITHOUT ANY WARRANTY; without even the implied warranty of
++MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
++See the GNU General Public License for more details.
++
++Replaces the keyboard/mouse "Controls" screen: a picture of the
++controller with what each button does, plus the controller options.
++The cvars live in the engine (engine/client/input/in_joy.c).
++*/
++
++#if XASH_UWP
++
++#include "Framework.h"
++#include "Bitmap.h"
++#include "PicButton.h"
++#include "Slider.h"
++#include "CheckBox.h"
++#include "SpinControl.h"
++#include "StringArrayModel.h"
++
++#define ART_BANNER     "gfx/shell/head_gamepad"
++#define ART_CONTROLLER "gfx/shell/xbox_controller.png"
++
++class CMenuXboxController : public CMenuFramework
++{
++public:
++	typedef CMenuFramework BaseClass;
++	CMenuXboxController() : CMenuFramework( "CMenuXboxController" ) { }
++
++private:
++	void _Init() override;
++	void _VidInit() override;
++	void SaveAndPopMenu() override;
++
++	CMenuBitmap   picture;
++	CMenuSlider   lookSens;
++	CMenuSpinControl aimAssist;
++	CMenuCheckBox invertLook;
++	CMenuCheckBox toggleCrouch;
++	CMenuCheckBox quickTurn;
++	CMenuCheckBox autoAim;
++};
++
++void CMenuXboxController::SaveAndPopMenu()
++{
++	lookSens.WriteCvar();
++	aimAssist.WriteCvar();
++	invertLook.WriteCvar();
++	toggleCrouch.WriteCvar();
++	quickTurn.WriteCvar();
++	autoAim.WriteCvar();
++
++	CMenuFramework::SaveAndPopMenu();
++}
++
++void CMenuXboxController::_Init()
++{
++	static const char *aimAssistNames[] = { "Off", "Low", "Medium", "High" };
++	static CStringArrayModel aimAssistModel( aimAssistNames, V_ARRAYSIZE( aimAssistNames ));
++
++	banner.SetPicture( ART_BANNER );
++
++	picture.SetPicture( ART_CONTROLLER );
++	picture.iFlags = QMF_INACTIVE;
++	picture.SetRect( 330, 150, 660, 330 );
++
++	lookSens.SetNameAndStatus( L( "Look sensitivity" ), L( "How fast the right stick turns the view" ));
++	lookSens.Setup( 0.25f, 3.0f, 0.05f );
++	lookSens.onChanged = CMenuEditable::WriteCvarCb;
++	lookSens.SetCoord( 330, 540 );
++	lookSens.size.w = 300;
++
++	aimAssist.SetNameAndStatus( L( "Aim assist" ), L( "Slows and nudges your aim when it crosses an enemy" ));
++	aimAssist.Setup( &aimAssistModel );
++	aimAssist.onChanged = CMenuEditable::WriteCvarCb;
++	aimAssist.SetRect( 700, 540, 260, 32 );
++
++	invertLook.SetNameAndStatus( L( "Invert look" ), L( "Push the right stick up to look down" ));
++	invertLook.onChanged = CMenuEditable::WriteCvarCb;
++	invertLook.SetCoord( 330, 610 );
++
++	toggleCrouch.SetNameAndStatus( L( "Toggle crouch" ), L( "Press B once to crouch, again to stand, instead of holding it" ));
++	toggleCrouch.onChanged = CMenuEditable::WriteCvarCb;
++	toggleCrouch.SetCoord( 560, 610 );
++
++	quickTurn.SetNameAndStatus( L( "Quick turn" ), L( "Turning speeds up when the right stick is held fully sideways" ));
++	quickTurn.onChanged = CMenuEditable::WriteCvarCb;
++	quickTurn.SetCoord( 790, 610 );
++
++	autoAim.SetNameAndStatus( L( "Auto-aim" ), L( "Half-Life's own auto-aim: shots bend slightly toward enemies" ));
++	autoAim.onChanged = CMenuEditable::WriteCvarCb;
++	autoAim.SetCoord( 330, 670 );
++
++	AddItem( banner );
++	AddButton( L( "Done" ), L( "Go back to the previous menu" ), PC_DONE, VoidCb( &CMenuXboxController::SaveAndPopMenu ), QMF_NOTIFY );
++	AddItem( picture );
++	AddItem( lookSens );
++	AddItem( aimAssist );
++	AddItem( invertLook );
++	AddItem( toggleCrouch );
++	AddItem( quickTurn );
++	AddItem( autoAim );
++}
++
++void CMenuXboxController::_VidInit()
++{
++	lookSens.LinkCvar( "joy_look_sens" );
++	aimAssist.LinkCvar( "joy_aimassist", CMenuEditable::CVAR_VALUE );
++	invertLook.LinkCvar( "joy_invert" );
++	toggleCrouch.LinkCvar( "joy_crouch_toggle" );
++	quickTurn.LinkCvar( "joy_quickturn" );
++	autoAim.LinkCvar( "sv_aim" );
++}
++
++ADD_MENU( menu_xbox_controller, CMenuXboxController, UI_XboxController_Menu );
++
++#endif // XASH_UWP
