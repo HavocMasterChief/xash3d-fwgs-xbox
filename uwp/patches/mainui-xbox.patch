@@ -258,10 +258,10 @@ index 0000000..eba303f
 +#endif // XASH_UWP
 diff --git a/menus/XboxGameplay.cpp b/menus/XboxGameplay.cpp
 new file mode 100644
-index 0000000..cc4faa4
+index 0000000..1356d8b
 --- /dev/null
 +++ b/menus/XboxGameplay.cpp
-@@ -0,0 +1,81 @@
+@@ -0,0 +1,90 @@
 +/*
 +XboxGameplay.cpp - gameplay options for the Xbox build
 +Copyright (C) 2026 HavocMasterChief
@@ -276,7 +276,8 @@ index 0000000..cc4faa4
 +MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 +See the GNU General Public License for more details.
 +
-+Blood mode (xb_blood, game DLL dlls/xb_gore.cpp) and controller vibration.
++Blood mode (xb_blood, game DLL dlls/xb_gore.cpp), ragdolls (xb_ragdoll,
++client cl_dll/xb_ragdoll.cpp) and controller vibration.
 +*/
 +
 +#if XASH_UWP
@@ -302,12 +303,14 @@ index 0000000..cc4faa4
 +
 +	CMenuSpinControl blood;
 +	CMenuCheckBox vibration;
++	CMenuCheckBox ragdolls;
 +};
 +
 +void CMenuXboxGameplay::SaveAndPopMenu()
 +{
 +	blood.WriteCvar();
 +	vibration.WriteCvar();
++	ragdolls.WriteCvar();
 +	CMenuFramework::SaveAndPopMenu();
 +}
 +
@@ -328,16 +331,22 @@ index 0000000..cc4faa4
 +	vibration.onChanged = CMenuEditable::WriteCvarCb;
 +	vibration.SetCoord( 330, 360 );
 +
++	ragdolls.SetNameAndStatus( L( "Ragdolls" ), L( "Human bodies fall and tumble with physics instead of playing a death animation" ));
++	ragdolls.onChanged = CMenuEditable::WriteCvarCb;
++	ragdolls.SetCoord( 330, 420 );
++
 +	AddItem( banner );
 +	AddButton( L( "Done" ), L( "Go back to the previous menu" ), PC_DONE, VoidCb( &CMenuXboxGameplay::SaveAndPopMenu ), QMF_NOTIFY );
 +	AddItem( blood );
 +	AddItem( vibration );
++	AddItem( ragdolls );
 +}
 +
 +void CMenuXboxGameplay::_VidInit()
 +{
 +	blood.LinkCvar( "xb_blood", CMenuEditable::CVAR_VALUE );
 +	vibration.LinkCvar( "vibration_enable" );
++	ragdolls.LinkCvar( "xb_ragdoll" );
 +}
 +
 +ADD_MENU( menu_xbox_gameplay, CMenuXboxGameplay, UI_XboxGameplay_Menu );

@@ -94,6 +94,36 @@ static void Joy_XbCrouchDown_f( void )
 	}
 }
 
+// View + D-pad chords: View alone shows scores, View + Up quicksaves,
+// View + Down quickloads; Up/Down alone still change weapons
+static qboolean xb_view_held;
+
+static void Joy_XbViewDown_f( void )
+{
+	xb_view_held = true;
+	Cbuf_AddText( "+showscores\n" );
+}
+
+static void Joy_XbViewUp_f( void )
+{
+	xb_view_held = false;
+	Cbuf_AddText( "-showscores\n" );
+}
+
+static void Joy_XbDpadUp_f( void )
+{
+	Cbuf_AddText( xb_view_held ? "savequick\n" : "invprev\n" );
+}
+
+static void Joy_XbDpadDown_f( void )
+{
+	Cbuf_AddText( xb_view_held ? "loadquick\n" : "invnext\n" );
+}
+
+static void Joy_XbNop_f( void )
+{
+}
+
 static void Joy_XbRumble_f( void )
 {
 	// xb_rumble <low> <high> <ms> <right trigger> <left trigger>, 0..1
@@ -1075,10 +1105,21 @@ void Joy_AutoPreset( void )
 	// configs saved by earlier Xbox builds bind B straight to +duck,
 	// move it to +xbcrouch so the toggle crouch option works
 	{
-		const char *b = Key_GetBinding( K_B_BUTTON );
+		static const struct { int key; const char *from, *to; } migrate[] =
+		{
+			{ K_B_BUTTON,    "+duck",       "+xbcrouch" },
+			{ K_BACK_BUTTON, "+showscores", "+xbview" },
+			{ K_DPAD_UP,     "invprev",     "+xbdpadup" },
+			{ K_DPAD_DOWN,   "invnext",     "+xbdpaddown" },
+		};
 
-		if( b && !Q_stricmp( b, "+duck" ))
-			Key_SetBinding( K_B_BUTTON, "+xbcrouch" );
+		for( size_t i = 0; i < ARRAYSIZE( migrate ); i++ )
+		{
+			const char *b = Key_GetBinding( migrate[i].key );
+
+			if( b && !Q_stricmp( b, migrate[i].from ))
+				Key_SetBinding( migrate[i].key, migrate[i].to );
+		}
 	}
 #endif
 
@@ -1150,6 +1191,12 @@ void Joy_Init( void )
 	Cmd_AddCommand( "+xbcrouch", Joy_XbCrouchDown_f, "crouch, held or toggled (joy_crouch_toggle)" );
 	Cmd_AddCommand( "-xbcrouch", Joy_XbCrouchUp_f, "release crouch when not toggled" );
 	Cmd_AddCommand( "xb_rumble", Joy_XbRumble_f, "controller rumble: low high ms [right trigger] [left trigger]" );
+	Cmd_AddCommand( "+xbview", Joy_XbViewDown_f, "scores, and the modifier for View + D-pad quicksave/quickload" );
+	Cmd_AddCommand( "-xbview", Joy_XbViewUp_f, "" );
+	Cmd_AddCommand( "+xbdpadup", Joy_XbDpadUp_f, "previous weapon, or quicksave while View is held" );
+	Cmd_AddCommand( "-xbdpadup", Joy_XbNop_f, "" );
+	Cmd_AddCommand( "+xbdpaddown", Joy_XbDpadDown_f, "next weapon, or quickload while View is held" );
+	Cmd_AddCommand( "-xbdpaddown", Joy_XbNop_f, "" );
 #endif
 	Cvar_RegisterVariable( &joy_side );
 	Cvar_RegisterVariable( &joy_forward );
