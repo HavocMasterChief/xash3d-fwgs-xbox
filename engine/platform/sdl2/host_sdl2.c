@@ -35,6 +35,14 @@ static void SDLash_KeyEvent( SDL_KeyboardEvent key )
 	int down = key.state != SDL_RELEASED;
 	int keynum = key.keysym.scancode;
 
+#if XASH_UWP
+	// Xbox B also raises the system Back request, which SDL turns into an extra
+	// AC_BACK key. B already arrives as a controller button, so drop the duplicate
+	// or every B press would also act as Escape (opening the pause menu).
+	if( keynum == SDL_SCANCODE_AC_BACK )
+		return;
+#endif
+
 #if XASH_ANDROID
 	if( keynum == SDL_SCANCODE_VOLUMEUP || keynum == SDL_SCANCODE_VOLUMEDOWN )
 	{
