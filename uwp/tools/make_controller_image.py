@@ -80,7 +80,7 @@ def label(anchor_pt, text_pt, text, align):
 
 # left side
 label((cx - 230, cy - 178), (330, 70), 'LT  Alt fire', 'r')
-label((cx - 220, cy - 134), (330, 130), 'LB  Prev weapon', 'r')
+label((cx - 220, cy - 134), (330, 130), 'LB  Weapon wheel', 'r')
 label((ls[0] - 42, ls[1]), (330, 230), 'Move', 'r')
 label((dp[0] - 40, dp[1]), (330, 400), 'D-pad  (see below)', 'r')
 label((view[0], view[1] - 14), (cx - 90, 30), 'View  Scores (+Up: Save)', 'r')
@@ -94,7 +94,7 @@ label((fb[0] - 42, fb[1] + 20), (W - 330, 345), 'X  Use', 'l')
 label((rs[0] + 42, rs[1] + 10), (W - 330, 420), 'Look / click: Light', 'l')
 label((menu[0], menu[1] - 14), (cx + 90, 30), 'Menu  Pause', 'l')
 
-d.text((cx, H - 40), 'D-pad Up/Down: weapons  |  View + Up: quicksave  |  View + Down: quickload  |  Right: last weapon', font=small, fill=(190, 190, 190, 255), anchor='mm')
+d.text((cx, H - 40), 'D-pad: Up/Down weapons, Left quicksave, Right last weapon   View+Up: save   View+Down: load', font=small, fill=(190, 190, 190, 255), anchor='mm')
 
 os.makedirs(os.path.dirname(out), exist_ok=True)
 img.save(out)

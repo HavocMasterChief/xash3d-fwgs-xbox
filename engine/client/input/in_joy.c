@@ -120,6 +120,18 @@ static void Joy_XbDpadDown_f( void )
 	Cbuf_AddText( xb_view_held ? "loadquick\n" : "invnext\n" );
 }
 
+// D-pad left/right: cycle the weapon wheel's category while it's open,
+// otherwise quicksave / last weapon as before
+static void Joy_XbDpadLeft_f( void )
+{
+	Cbuf_AddText( Cvar_VariableValue( "xb_wheel_open" ) ? "xb_wheel_cycle -1\n" : "savequick\n" );
+}
+
+static void Joy_XbDpadRight_f( void )
+{
+	Cbuf_AddText( Cvar_VariableValue( "xb_wheel_open" ) ? "xb_wheel_cycle 1\n" : "lastinv\n" );
+}
+
 static void Joy_XbNop_f( void )
 {
 }
@@ -640,6 +652,16 @@ static void Joy_XboxLook( float fw, float side, float *dpitch, float *dyaw )
 	if( joy_invert.value )
 		pitchAxis = -pitchAxis;
 
+	// weapon wheel open (client xb_wheel.cpp): the right stick points at a
+	// category instead of turning the view
+	if( Cvar_VariableValue( "xb_wheel_open" ))
+	{
+		Cvar_SetValue( "xb_wheel_x", (float)joyaxis[JOY_AXIS_YAW].rawval / (float)SHRT_MAX );
+		Cvar_SetValue( "xb_wheel_y", (float)joyaxis[JOY_AXIS_PITCH].rawval / (float)SHRT_MAX );
+		fullTilt = 0.0f;
+		return;
+	}
+
 	// radial deadzone, rescaled so movement starts smoothly at the edge of it
 	if( mag > dz )
 	{
@@ -1111,6 +1133,9 @@ void Joy_AutoPreset( void )
 			{ K_BACK_BUTTON, "+showscores", "+xbview" },
 			{ K_DPAD_UP,     "invprev",     "+xbdpadup" },
 			{ K_DPAD_DOWN,   "invnext",     "+xbdpaddown" },
+			{ K_DPAD_LEFT,   "savequick",   "+xbdpadleft" },
+			{ K_DPAD_RIGHT,  "lastinv",     "+xbdpadright" },
+			{ K_L1_BUTTON,   "invprev",     "+xbwheel" },
 		};
 
 		for( size_t i = 0; i < ARRAYSIZE( migrate ); i++ )
@@ -1197,6 +1222,10 @@ void Joy_Init( void )
 	Cmd_AddCommand( "-xbdpadup", Joy_XbNop_f, "" );
 	Cmd_AddCommand( "+xbdpaddown", Joy_XbDpadDown_f, "next weapon, or quickload while View is held" );
 	Cmd_AddCommand( "-xbdpaddown", Joy_XbNop_f, "" );
+	Cmd_AddCommand( "+xbdpadleft", Joy_XbDpadLeft_f, "quicksave, or previous weapon in the wheel's category" );
+	Cmd_AddCommand( "-xbdpadleft", Joy_XbNop_f, "" );
+	Cmd_AddCommand( "+xbdpadright", Joy_XbDpadRight_f, "last weapon, or next weapon in the wheel's category" );
+	Cmd_AddCommand( "-xbdpadright", Joy_XbNop_f, "" );
 #endif
 	Cvar_RegisterVariable( &joy_side );
 	Cvar_RegisterVariable( &joy_forward );
