@@ -167,6 +167,25 @@ Export-Certificate -Cert $cert -FilePath $cer | Out-Null
 Run $signtool @('sign', '/fd', 'SHA256', '/f', $pfx, '/p', 'xash3d', $appx)
 
 # ---------------------------------------------------------------------------
+Step 'Defender scan (diagnostic only, never fails the build)'
+try {
+	$mp = Get-ChildItem "$env:ProgramData\Microsoft\Windows Defender\Platform" -Directory -ErrorAction Stop |
+		Sort-Object Name -Descending | Select-Object -First 1
+	$mpcmd = if ($mp) { Join-Path $mp.FullName 'MpCmdRun.exe' } else { "$env:ProgramFiles\Windows Defender\MpCmdRun.exe" }
+	Write-Host "MpCmdRun: $mpcmd"
+	& $mpcmd -SignatureUpdate 2>&1 | Select-Object -Last 3 | ForEach-Object { Write-Host "  $_" }
+	$targets = @(Get-ChildItem $Pkg -File -Recurse | Where-Object { $_.Extension -in '.dll', '.exe', '.pk3' }) + @(Get-Item $appx)
+	foreach ($t in $targets) {
+		$out = & $mpcmd -Scan -ScanType 3 -File $t.FullName -DisableRemediation 2>&1 | Out-String
+		$threat = ($out -split "`n" | Where-Object { $_ -match 'Threat|found' }) -join ' | '
+		Write-Host ("  {0,-40} exit {1}  {2}" -f $t.Name, $LASTEXITCODE, $threat.Trim())
+	}
+} catch {
+	Write-Host "Defender scan unavailable on this runner: $_"
+}
+$global:LASTEXITCODE = 0
+
+# ---------------------------------------------------------------------------
 Step 'Bundle release zip'
 $dist = Join-Path $Work 'dist'
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
