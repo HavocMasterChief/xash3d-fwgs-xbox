@@ -47,6 +47,11 @@ static void FatalError( const char *fmt, ... )
 
 int main( int argc, char *argv[] )
 {
+	// On Xbox, B also raises the system "Back" request. Unless it's marked
+	// handled, the OS treats it as leaving the app and closes it, which looks
+	// exactly like a crash. B is still delivered to the game as a normal button.
+	SDL_SetHint( SDL_HINT_WINRT_HANDLE_BACK_BUTTON, "1" );
+
 	// LocalState is the only writable place an app container gets.
 	// Everything the engine reads or writes (valve/, config, saves, logs) goes there.
 	const char *localState = SDL_WinRTGetFSPathUTF8( SDL_WINRT_PATH_LOCAL_FOLDER );
