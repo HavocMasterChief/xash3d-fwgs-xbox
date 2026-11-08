@@ -8,7 +8,7 @@ red or alien-yellow itself.
   xb_splat.spr  6 frames  irregular splats (where a droplet lands)
   xb_drop.spr   1 frame   soft streak (a droplet in flight)
   xb_pool.spr   3 frames  pools that spread under bodies
-  xb_foot.spr   2 frames  left / right bloody footprint
+  xb_foot.spr   8 frames  left / right: full, toe only, heel only, smudged
 
 Output: uwp/package/HalfLife/sprites/
 """
@@ -105,9 +105,32 @@ def pool(size, seed):
     return img
 
 
-def footprint(w, h, left):
-    """Boot sole: rounded toe, wide ball, narrow arch on the outer side, heel block, lug tread."""
-    rnd = random.Random(7 if left else 8)
+def value_noise(w, h, cell, seed):
+    """smooth random field 0..1"""
+    rnd = random.Random(seed)
+    gw, gh = w // cell + 2, h // cell + 2
+    g = [[rnd.random() for _ in range(gw)] for _ in range(gh)]
+    out = []
+    for y in range(h):
+        row = []
+        for x in range(w):
+            fx, fy = x / cell, y / cell
+            ix, iy = int(fx), int(fy)
+            tx, ty = fx - ix, fy - iy
+            tx, ty = tx * tx * (3 - 2 * tx), ty * ty * (3 - 2 * ty)
+            a = g[iy][ix] * (1 - tx) + g[iy][ix + 1] * tx
+            b = g[iy + 1][ix] * (1 - tx) + g[iy + 1][ix + 1] * tx
+            row.append(a * (1 - ty) + b * ty)
+        out.append(row)
+    return out
+
+
+def footprint(w, h, left, mode='full', seed=0):
+    """Boot sole: rounded toe, wide ball, narrow arch on the outer side, heel block, lug tread.
+    mode: full (fresh, wet), toe / heel (only part of the sole still carries blood),
+    smudge (nearly dry, broken up)."""
+    rnd = random.Random(seed * 2 + (7 if left else 8))
+    noise = value_noise(w, h, 6, seed * 31 + (1 if left else 2))
 
     def smooth(a, b, x):
         x = max(0.0, min(1.0, (x - a) / (b - a)))
@@ -136,12 +159,26 @@ def footprint(w, h, left):
                 u = -u
             d = (hw - abs(u - c)) / 0.12
             val = max(0.0, min(1.0, d))
-            # heel block is a separate pad
             if 0.6 < t < 0.65:
                 val *= 0.25
-            # lug tread: chevrons up front, bars on the heel
+            # tread
             lug = math.sin((t * 2 + abs(u - c) * 0.3) * 30) if t < 0.6 else math.sin(t * 2 * 34)
-            tread = 0.35 if lug > 0.55 else 1.0
+            n = noise[y][x]
+            if mode == 'full':
+                # wet: tread half filled in, edges a little blotchy
+                tread = 0.65 if lug > 0.55 else 1.0
+                val *= 0.8 + 0.2 * n
+            elif mode == 'toe':
+                tread = 0.3 if lug > 0.55 else 1.0
+                val *= 1.0 - smooth(0.42, 0.62, t)            # heel no longer prints
+                val *= smooth(0.25, 0.55, n + 0.15)
+            elif mode == 'heel':
+                tread = 0.3 if lug > 0.55 else 1.0
+                val *= smooth(0.55, 0.68, t)                  # only the heel
+                val *= smooth(0.25, 0.55, n + 0.15)
+            else:
+                tread = 0.3 if lug > 0.4 else 1.0
+                val *= smooth(0.45, 0.7, n)                   # broken, mostly gone
             tread *= 0.8 + 0.2 * rnd.random()
             row.append(val * tread * 225)
         img.append(row)
@@ -151,4 +188,7 @@ def footprint(w, h, left):
 write_spr('xb_splat.spr', [blob(64, s) for s in range(6)])
 write_spr('xb_drop.spr', [streak(16, 64)])
 write_spr('xb_pool.spr', [pool(128, s) for s in (11, 12, 13)])
-write_spr('xb_foot.spr', [footprint(32, 80, True), footprint(32, 80, False)])
+# left/right pairs: 0-1 full, 2-3 toe only, 4-5 heel only, 6-7 smudged
+write_spr('xb_foot.spr', [footprint(32, 80, left, mode, i)
+                          for i, mode in enumerate(('full', 'toe', 'heel', 'smudge'))
+                          for left in (True, False)])

@@ -2497,6 +2497,10 @@ Con_DrawVersion
 Used by menu
 ==================
 */
+#if XASH_UWP && !defined( XBOX_BUILD_NUMBER )
+#define XBOX_BUILD_NUMBER 0
+#endif
+
 void Con_DrawVersion( void )
 {
 	// draws the current build
@@ -2506,6 +2510,19 @@ void Con_DrawVersion( void )
 	if( !scr_drawversion.value )
 		return;
 
+#if XASH_UWP
+	if( cls.key_dest == key_menu )
+	{
+		// Xbox: our build number (the GitHub release's), above the menu's
+		// bottom bar and inside the TV safe area, not over the button hints
+		int stringLen, charH = 0;
+
+		Q_snprintf( curbuild, sizeof( curbuild ), "Half-Life for Xbox  -  Build %i   (Xash3D FWGS " XASH_VERSION ")", XBOX_BUILD_NUMBER );
+		Con_DrawStringLen( curbuild, &stringLen, &charH );
+		Con_DrawString( refState.width * 0.95f - stringLen, refState.height * ( 700.0f / 768.0f ) - charH * 1.3f, curbuild, color );
+		return;
+	}
+#endif
 	if( cls.key_dest == key_menu )
 	{
 		Q_snprintf( curbuild, sizeof( curbuild ),

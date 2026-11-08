@@ -1,8 +1,26 @@
 diff --git a/BaseMenu.cpp b/BaseMenu.cpp
-index 7b727eb..c1c3874 100755
+index 7b727eb..11ac0d1 100755
 --- a/BaseMenu.cpp
 +++ b/BaseMenu.cpp
-@@ -776,6 +776,11 @@ void UI_MouseMove( int x, int y )
+@@ -732,6 +732,17 @@ void UI_KeyEvent( int key, int down )
+ 	clientActive = uiStatic.client.IsActive();
+ 	menuActive = uiStatic.menu.IsActive();
+ 
++#if XASH_UWP
++	// every press the menu gets, to track down presses that seem to do nothing
++	if( menuActive )
++	{
++		CMenuBaseWindow *w = uiStatic.menu.Current();
++		CMenuBaseItem *it = w ? w->ItemAtCursor() : NULL;
++		Con_DPrintf( "menu: key %d %s, window %s, selected %s\n", key, down ? "down" : "up",
++			w && w->szName ? w->szName : "-", it && it->szName ? it->szName : "-" );
++	}
++#endif
++
+ 	if( clientActive && !menuActive )
+ 		down ? uiStatic.client.KeyDownEvent( key ) :
+ 			uiStatic.client.KeyUpEvent( key );
+@@ -776,6 +787,11 @@ void UI_MouseMove( int x, int y )
  	if( !uiStatic.initialized )
  		return;
  
@@ -14,7 +32,7 @@ index 7b727eb..c1c3874 100755
  	clientActive = uiStatic.client.IsActive();
  	menuActive = uiStatic.menu.IsActive();
  
-@@ -1205,6 +1210,10 @@ void UI_Init( void )
+@@ -1205,6 +1221,10 @@ void UI_Init( void )
  	gMenu.m_gameinfo = *gi;
  
  	uiStatic.renderPicbuttonText = gMenu.m_gameinfo.flags & GFL_RENDER_PICBUTTON_TEXT;
@@ -52,35 +70,85 @@ index fd687f2..a252e74 100644
  		int	x;
  
 diff --git a/controls/Framework.cpp b/controls/Framework.cpp
-index 5c98231..ab49639 100644
+index 5c98231..c71a841 100644
 --- a/controls/Framework.cpp
 +++ b/controls/Framework.cpp
-@@ -61,6 +61,34 @@ void CMenuFramework::Draw()
+@@ -14,6 +14,7 @@ GNU General Public License for more details.
+ */
+ #include "Framework.h"
+ #include "PicButton.h"
++#include "FontManager.h"
+ 
+ // menu banners used fiexed rectangle (virtual screenspace at 640x480)
+ #define UI_BANNER_POSX		72
+@@ -61,6 +62,76 @@ void CMenuFramework::Draw()
  		lastItem = item;
  	}
  
 +#if XASH_UWP
 +	// Xbox: the selected item's description always goes in a fixed bar at the
 +	// bottom of the screen, never next to the item where it covers settings,
-+	// with the controller hints at the right of the same bar
++	// with the controller hints at the right of the same bar. Text stays in
++	// the TV safe area (5% in from each side), and a long description shrinks
++	// or wraps to two lines instead of running off the screen.
 +	{
-+		int barH = 44 * uiStatic.scaleY;
-+		int barY = uiStatic.yOffset + 708 * uiStatic.scaleY;
-+		int pad = 24 * uiStatic.scaleX;
++		int barH = 46 * uiStatic.scaleY;
++		int barY = uiStatic.yOffset + 706 * uiStatic.scaleY;
++		int safe = ScreenWidth * 0.05f;
++		int gap = 32 * uiStatic.scaleX;
 +		int chH = UI_SMALL_CHAR_HEIGHT * 1.15f * uiStatic.scaleY;
-+		const char *hints = L( "(A) Select     (B) Back" );
++		const char *hints = xbHints ? xbHints : L( "(A) Select     (B) Back" );
++		int hintsW = g_FontMgr->GetTextWideScaled( uiStatic.hDefaultFont, hints, chH );
 +
 +		UI_FillRect( 0, barY, ScreenWidth, barH, PackRGBA( 0, 0, 0, 150 ));
 +		UI_FillRect( 0, barY, ScreenWidth, 2 * uiStatic.scaleY, PackRGBA( 255, 165, 0, 180 ));
 +
-+		UI_DrawString( uiStatic.hDefaultFont, ScreenWidth / 2, barY, ScreenWidth / 2 - pad, barH,
-+			hints, PackRGBA( 200, 200, 200, 255 ), chH, QM_RIGHT, ETF_SHADOW | ETF_NOSIZELIMIT | ETF_FORCECOL );
++		UI_DrawString( uiStatic.hDefaultFont, ScreenWidth - safe - hintsW, barY, hintsW, barH,
++			hints, PackRGBA( 200, 200, 200, 255 ), chH, QM_LEFT, ETF_SHADOW | ETF_NOSIZELIMIT | ETF_FORCECOL );
 +
 +		if( item && item->szStatusText && item->szStatusText[0] && !FBitSet( item->iFlags, QMF_GRAYED ))
 +		{
 +			float alpha = bound( 0, ((( uiStatic.realTime - statusFadeTime ) - 60 ) * 0.008f ), 1 );
-+			UI_DrawString( uiStatic.hDefaultFont, pad, barY, ScreenWidth * 0.68f - pad, barH,
-+				item->szStatusText, PackRGBA( 235, 235, 235, (int)( alpha * 255 )), chH, QM_LEFT, ETF_SHADOW | ETF_NOSIZELIMIT | ETF_FORCECOL );
++			unsigned int col = PackRGBA( 235, 235, 235, (int)( alpha * 255 ));
++			const char *text = item->szStatusText;
++			int availW = ScreenWidth - safe * 2 - hintsW - gap;
++			int h = chH;
++			int w = g_FontMgr->GetTextWideScaled( uiStatic.hDefaultFont, text, h );
++
++			// a little smaller first
++			if( w > availW )
++			{
++				h = Q_max( (int)( chH * 0.82f ), (int)( chH * availW / (float)w ));
++				w = g_FontMgr->GetTextWideScaled( uiStatic.hDefaultFont, text, h );
++			}
++
++			if( w <= availW )
++			{
++				UI_DrawString( uiStatic.hDefaultFont, safe, barY, availW, barH,
++					text, col, h, QM_LEFT, ETF_SHADOW | ETF_NOSIZELIMIT | ETF_FORCECOL );
++			}
++			else
++			{
++				// two lines, split at the space nearest the middle
++				char line1[256], line2[256];
++				int len = strlen( text ), split = -1;
++				for( int d = 0; d < len / 2 && split < 0; d++ )
++				{
++					if( text[len / 2 + d] == ' ' ) split = len / 2 + d;
++					else if( len / 2 - d > 0 && text[len / 2 - d] == ' ' ) split = len / 2 - d;
++				}
++				if( split < 0 ) split = len / 2;
++
++				Q_strncpy( line1, text, Q_min( split + 1, (int)sizeof( line1 )));
++				Q_strncpy( line2, text + split + ( text[split] == ' ' ? 1 : 0 ), sizeof( line2 ));
++
++				h = Q_min( h, (int)( barH * 0.46f ));
++				int lh = barH / 2;
++				UI_DrawString( uiStatic.hDefaultFont, safe, barY, availW, lh,
++					line1, col, h, QM_LEFT, ETF_SHADOW | ETF_NOSIZELIMIT | ETF_FORCECOL );
++				UI_DrawString( uiStatic.hDefaultFont, safe, barY + lh, availW, lh,
++					line2, col, h, QM_LEFT, ETF_SHADOW | ETF_NOSIZELIMIT | ETF_FORCECOL );
++			}
 +		}
 +		else statusFadeTime = uiStatic.realTime;
 +		return;
@@ -90,11 +158,42 @@ index 5c98231..ab49639 100644
  	// draw status text if status text isn't rendered at right side of an item
  	// ideally, framework shouldn't even know about this but since everything
  	// WON-styled goes here, let's leave it here...
+diff --git a/controls/Framework.h b/controls/Framework.h
+index f1db70e..29b2456 100644
+--- a/controls/Framework.h
++++ b/controls/Framework.h
+@@ -53,6 +53,11 @@ public:
+ 
+ 	void PrepareBannerAnimation( EAnimation direction, CMenuPicButton *initiator );
+ 
++#if XASH_UWP
++	// button hints in the bottom bar, NULL for "(A) Select  (B) Back"
++	const char *xbHints = NULL;
++#endif
++
+ 	class CMenuBannerBitmap : public CMenuBaseItem
+ 	{
+ 	public:
 diff --git a/controls/ItemsHolder.cpp b/controls/ItemsHolder.cpp
-index 7be4928..8965183 100644
+index 7be4928..eac1a83 100644
 --- a/controls/ItemsHolder.cpp
 +++ b/controls/ItemsHolder.cpp
-@@ -331,6 +331,37 @@ void CMenuItemsHolder::Draw( )
+@@ -71,6 +71,14 @@ bool CMenuItemsHolder::Key( const int key, const bool down )
+ 		// don't send released event to item, which don't got pressed before!
+ 		if( m_pItemAtCursorOnDown && m_pItemAtCursorOnDown->m_pParent == this )
+ 			item = m_pItemAtCursorOnDown;
++#if XASH_UWP
++		// Xbox: if the press itself never reached this window (it arrived while
++		// the screen was still coming up), the release still picks what's
++		// selected, so one press of A is always enough. Items opened by this
++		// release can't get it: it's handled here, before they exist.
++		else if( UI::Key::IsEnter( key ))
++			item = ItemAtCursor();
++#endif
+ 		m_pItemAtCursorOnDown = NULL;
+ 	}
+ 
+@@ -331,6 +339,37 @@ void CMenuItemsHolder::Draw( )
  {
  	CMenuBaseItem *item;
  
@@ -160,15 +259,17 @@ index e3e0063..4fd9017 100644
  		Point coord;
  
 diff --git a/menus/Main.cpp b/menus/Main.cpp
-index 4d1a382..75a6ca0 100644
+index 4d1a382..1752f6d 100644
 --- a/menus/Main.cpp
 +++ b/menus/Main.cpp
-@@ -31,6 +31,45 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+@@ -31,6 +31,47 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  #include "AnimatedBanner.h"
  #include "MovieBanner.h"
  
 +#if XASH_UWP
 +void UI_XboxSettings_Menu( void );
++void UI_XboxLoad_Menu( void );
++void UI_XboxSaveLoad_Menu( void );
 +
 +/*
 +=================
@@ -209,7 +310,7 @@ index 4d1a382..75a6ca0 100644
  #define ART_MINIMIZE_N	"gfx/shell/min_n"
  #define ART_MINIMIZE_F	"gfx/shell/min_f"
  #define ART_MINIMIZE_D	"gfx/shell/min_d"
-@@ -58,11 +97,13 @@ private:
+@@ -58,11 +99,13 @@ private:
  	void DisconnectDialogCb();
  	void HazardCourseDialogCb();
  	void HazardCourseCb();
@@ -223,7 +324,7 @@ index 4d1a382..75a6ca0 100644
  	CMenuPicButton	resumeGame;
  	CMenuPicButton	disconnect;
  	CMenuPicButton	newGame;
-@@ -133,10 +174,12 @@ bool CMenuMain::KeyDown( int key )
+@@ -133,10 +176,12 @@ bool CMenuMain::KeyDown( int key )
  			if( !dialog.IsVisible() )
  				UI_CloseMenu();
  		}
@@ -236,7 +337,7 @@ index 4d1a382..75a6ca0 100644
  		return true;
  	}
  	return CMenuFramework::KeyDown( key );
-@@ -164,6 +207,21 @@ void CMenuMain::HazardCourseCb()
+@@ -164,6 +209,21 @@ void CMenuMain::HazardCourseCb()
  	EngFuncs::ClientCmd( false, "hazardcourse\n" );
  }
  
@@ -258,7 +359,7 @@ index 4d1a382..75a6ca0 100644
  void CMenuMain::_Init( void )
  {
  	if( gMenu.m_gameinfo.trainmap[0] && stricmp( gMenu.m_gameinfo.trainmap, gMenu.m_gameinfo.startmap ) != 0 )
-@@ -185,6 +243,10 @@ void CMenuMain::_Init( void )
+@@ -185,6 +245,10 @@ void CMenuMain::_Init( void )
  		EngFuncs::KEY_SetDest( KEY_CONSOLE );
  	});
  
@@ -269,7 +370,7 @@ index 4d1a382..75a6ca0 100644
  	resumeGame.SetNameAndStatus( L( "GameUI_GameMenu_ResumeGame" ), L( "StringsList_188" ) );
  	resumeGame.SetPicture( PC_RESUME_GAME );
  	resumeGame.iFlags |= QMF_NOTIFY;
-@@ -195,7 +257,11 @@ void CMenuMain::_Init( void )
+@@ -195,12 +259,20 @@ void CMenuMain::_Init( void )
  	disconnect.iFlags |= QMF_NOTIFY;
  	disconnect.onReleased = VoidCb( &CMenuMain::DisconnectDialogCb );
  
@@ -281,7 +382,16 @@ index 4d1a382..75a6ca0 100644
  	newGame.SetPicture( PC_NEW_GAME );
  	newGame.iFlags |= QMF_NOTIFY;
  	newGame.onReleased = UI_NewGame_Menu;
-@@ -211,10 +277,16 @@ void CMenuMain::_Init( void )
+ 
++#if XASH_UWP
++	hazardCourse.SetNameAndStatus( L( "Hazard Course" ), L( "Learn to use the H.E.V. suit in the Black Mesa training course" ));
++#else
+ 	hazardCourse.SetNameAndStatus( L( "GameUI_TrainingRoom" ), L( "StringsList_190" ) );
++#endif
+ 	hazardCourse.SetPicture( PC_HAZARD_COURSE );
+ 	hazardCourse.iFlags |= QMF_NOTIFY;
+ 	hazardCourse.onReleasedClActive = VoidCb( &CMenuMain::HazardCourseDialogCb );
+@@ -211,10 +283,16 @@ void CMenuMain::_Init( void )
  	multiPlayer.iFlags |= QMF_NOTIFY;
  	multiPlayer.onReleased = UI_MultiPlayer_Menu;
  
@@ -298,7 +408,7 @@ index 4d1a382..75a6ca0 100644
  
  	saveRestore.iFlags |= QMF_NOTIFY;
  
-@@ -282,6 +354,20 @@ void CMenuMain::_Init( void )
+@@ -282,6 +360,20 @@ void CMenuMain::_Init( void )
  	dialog.Link( this );
  
  	AddItem( banner );
@@ -319,7 +429,7 @@ index 4d1a382..75a6ca0 100644
  	AddItem( console );
  	AddItem( disconnect );
  	AddItem( resumeGame );
-@@ -299,8 +385,11 @@ void CMenuMain::_Init( void )
+@@ -299,8 +391,11 @@ void CMenuMain::_Init( void )
  
  	AddItem( previews );
  	AddItem( quit );
@@ -331,7 +441,7 @@ index 4d1a382..75a6ca0 100644
  }
  
  /*
-@@ -310,6 +399,53 @@ UI_Main_Init
+@@ -310,6 +405,53 @@ UI_Main_Init
  */
  void CMenuMain::VidInit( bool connected )
  {
@@ -372,12 +482,12 @@ index 4d1a382..75a6ca0 100644
 +		if( connected && single )
 +		{
 +			saveRestore.SetNameAndStatus( L( "Save / Load Game" ), L( "Save your progress or load a saved game" ));
-+			saveRestore.onReleased = UI_SaveLoad_Menu;
++			saveRestore.onReleased = UI_XboxSaveLoad_Menu;
 +		}
 +		else
 +		{
 +			saveRestore.SetNameAndStatus( L( "Load Game" ), L( "Load a saved game" ));
-+			saveRestore.onReleased = UI_LoadGame_Menu;
++			saveRestore.onReleased = UI_XboxLoad_Menu;
 +		}
 +		return;
 +	}
@@ -385,7 +495,7 @@ index 4d1a382..75a6ca0 100644
  	int hoffset = ( 70 / 640.0 ) * 1024.0;
  
  	// in original menu Previews is located at specific point
-@@ -334,8 +470,10 @@ void CMenuMain::VidInit( bool connected )
+@@ -334,8 +476,10 @@ void CMenuMain::VidInit( bool connected )
  		yoffset -= ygap;
  	}
  
@@ -396,7 +506,7 @@ index 4d1a382..75a6ca0 100644
  
  	bool single = gpGlobals->maxClients < 2;
  
-@@ -394,7 +532,11 @@ void CMenuMain::_VidInit()
+@@ -394,7 +538,11 @@ void CMenuMain::_VidInit()
  
  void CMenuMain::Think()
  {
@@ -410,10 +520,10 @@ index 4d1a382..75a6ca0 100644
  			console.Show();
 diff --git a/menus/XboxRows.cpp b/menus/XboxRows.cpp
 new file mode 100644
-index 0000000..d0fa16e
+index 0000000..e803d19
 --- /dev/null
 +++ b/menus/XboxRows.cpp
-@@ -0,0 +1,287 @@
+@@ -0,0 +1,285 @@
 +/*
 +XboxRows.cpp - controller-friendly settings rows for the Xbox build
 +Copyright (C) 2026 HavocMasterChief
@@ -598,10 +708,8 @@ index 0000000..d0fa16e
 +	if( !UI::Key::IsEnter( key ))
 +		return false;
 +
-+	// only a press that started on this row counts, so the release of the
-+	// A that opened this menu can't also pick something in it
-+	if( !pressed )
-+		return true;
++	// the release picks: the window that opened this one handled its own
++	// release, so it can't arrive here (CMenuItemsHolder::Key)
 +	pressed = false;
 +
 +	if( kind == BUTTON )
@@ -791,6 +899,490 @@ index 0000000..026b75d
 +
 +#endif // XASH_UWP
 +#endif // XBOX_ROWS_H
+diff --git a/menus/XboxSaves.cpp b/menus/XboxSaves.cpp
+new file mode 100644
+index 0000000..343a230
+--- /dev/null
++++ b/menus/XboxSaves.cpp
+@@ -0,0 +1,478 @@
++/*
++XboxSaves.cpp - the Xbox build's Load Game and Save / Load Game screen
++Copyright (C) 2026 HavocMasterChief
++
++This program is free software; you can redistribute it and/or
++modify it under the terms of the GNU General Public License
++as published by the Free Software Foundation; either version 2
++of the License, or (at your option) any later version.
++
++This program is distributed in the hope that it will be useful,
++but WITHOUT ANY WARRANTY; without even the implied warranty of
++MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
++See the GNU General Public License for more details.
++
++One list, newest save first: what it is (chapter or map, quick/auto),
++when, and time played, with the save's screenshot beside it.
++
++  Load Game (title screen)     A load, X delete, B back
++  Save / Load Game (in game)   "New save" on top: A saves a new one.
++                               On a save: A load, Y save over it, X delete.
++
++Deleting and saving over ask first.
++*/
++
++#if XASH_UWP
++
++#include "Framework.h"
++#include "YesNoMessageBox.h"
++#include "keydefs.h"
++#include "XboxRows.h"
++
++#include <ctype.h>
++
++#define XB_SAVES_MAX     128
++#define XB_SAVES_VISIBLE 9
++
++struct xbSave_t
++{
++	char name[CS_SIZE];     // file name without extension, "" for New save
++	char title[CS_SIZE];
++	char when[CS_SIZE];
++	char played[CS_TIME];
++};
++
++/*
++=================
++CMenuXbSaveList
++
++The list: up/down move, the window handles the buttons.
++=================
++*/
++class CMenuXbSaveList : public CMenuBaseItem
++{
++public:
++	typedef CMenuBaseItem BaseClass;
++
++	CMenuXbSaveList() : count( 0 ), cur( 0 ), top( 0 )
++	{
++		charSize = UI_MED_CHAR_HEIGHT;
++	}
++
++	bool KeyDown( int key ) override
++	{
++		int dir = 0;
++		if( UI::Key::IsUpArrow( key )) dir = -1;
++		else if( UI::Key::IsDownArrow( key )) dir = 1;
++		else return false;
++
++		if( count > 0 )
++		{
++			int next = cur + dir;
++			if( next >= 0 && next < count )
++			{
++				cur = next;
++				if( cur < top ) top = cur;
++				if( cur >= top + XB_SAVES_VISIBLE ) top = cur - XB_SAVES_VISIBLE + 1;
++				PlayLocalSound( uiStatic.sounds[SND_MOVE] );
++				_Event( QM_CHANGED );
++			}
++		}
++		return true;
++	}
++
++	bool KeyUp( int key ) override
++	{
++		return UI::Key::IsUpArrow( key ) || UI::Key::IsDownArrow( key );
++	}
++
++	void Draw() override
++	{
++		int rowH = m_scSize.h / XB_SAVES_VISIBLE;
++		int pad = 14 * uiStatic.scaleX;
++		unsigned int flags = ETF_SHADOW | ETF_NOSIZELIMIT | ETF_FORCECOL;
++
++		if( !count )
++		{
++			UI_DrawString( font, m_scPos.x + pad, m_scPos.y, m_scSize.w - pad, rowH,
++				L( "No saved games yet" ), PackRGBA( 180, 180, 180, 255 ), m_scChSize, QM_LEFT, flags );
++			return;
++		}
++
++		for( int i = 0; i < XB_SAVES_VISIBLE && top + i < count; i++ )
++		{
++			const xbSave_t &s = saves[top + i];
++			bool sel = ( top + i == cur );
++			int y = m_scPos.y + i * rowH;
++
++			UI_FillRect( m_scPos.x, y + 2, m_scSize.w, rowH - 4, sel ? PackRGBA( 255, 150, 0, 60 ) : PackRGBA( 0, 0, 0, 120 ));
++			if( sel )
++				UI_FillRect( m_scPos.x, y + 2, 6 * uiStatic.scaleX, rowH - 4, PackRGBA( 255, 165, 0, 255 ));
++
++			unsigned int col = sel ? PackRGBA( 255, 200, 90, 255 ) : PackRGBA( 215, 215, 215, 255 );
++			unsigned int dim = sel ? PackRGBA( 240, 200, 140, 255 ) : PackRGBA( 160, 160, 160, 255 );
++			int small = m_scChSize * 0.75f;
++
++			if( !s.name[0] )
++			{
++				UI_DrawString( font, m_scPos.x + pad, y, m_scSize.w - pad * 2, rowH, s.title, col, m_scChSize, QM_LEFT, flags );
++				continue;
++			}
++
++			// title on top, when and time played under it
++			UI_DrawString( font, m_scPos.x + pad, y + 2, m_scSize.w * 0.7f, rowH * 0.58f, s.title, col, m_scChSize * 0.9f, QM_LEFT, flags );
++			UI_DrawString( font, m_scPos.x + pad, y + rowH * 0.5f, m_scSize.w * 0.6f, rowH * 0.45f, s.when, dim, small, QM_LEFT, flags );
++			UI_DrawString( font, m_scPos.x + m_scSize.w * 0.6f, y + rowH * 0.5f, m_scSize.w * 0.4f - pad, rowH * 0.45f, s.played, dim, small, QM_RIGHT, flags );
++		}
++
++		// more above / below
++		if( top > 0 )
++			UI_DrawString( font, m_scPos.x, m_scPos.y - m_scChSize, m_scSize.w, m_scChSize, "^", PackRGBA( 200, 200, 200, 255 ), m_scChSize, QM_CENTER, flags );
++		if( top + XB_SAVES_VISIBLE < count )
++			UI_DrawString( font, m_scPos.x, m_scPos.y + m_scSize.h, m_scSize.w, m_scChSize, "v", PackRGBA( 200, 200, 200, 255 ), m_scChSize, QM_CENTER, flags );
++	}
++
++	xbSave_t saves[XB_SAVES_MAX];
++	int count, cur, top;
++};
++
++/*
++=================
++CMenuXbSaves
++=================
++*/
++class CMenuXbSaves : public CMenuFramework
++{
++public:
++	typedef CMenuFramework BaseClass;
++	CMenuXbSaves() : CMenuFramework( "CMenuXbSaves" ), saveMode( false ) { }
++
++	void Open( bool save )
++	{
++		saveMode = save;
++		Show();
++	}
++
++	bool KeyDown( int key ) override;
++	bool KeyUp( int key ) override;
++
++	void LoadCb();
++	void SaveNewCb();
++	void SaveOverCb();
++	void DeleteCb();
++
++private:
++	void _Init() override;
++	void _VidInit() override;
++	void Reload() override;
++	void Draw() override;
++
++	void Refresh();
++	void Selected();
++	const xbSave_t *Current() const;
++
++	CMenuXbSaveList list;
++	CMenuYesNoMessageBox dialog;
++	CImage shot;
++	char shotName[CS_SIZE];
++	bool saveMode;
++	int pressed;
++};
++
++static int XB_CompareSaves( const void *a, const void *b )
++{
++	const char *file1 = *((const char **)a);
++	const char *file2 = *((const char **)b);
++	int result = 0;
++
++	// newest first
++	EngFuncs::CompareFileTime( file2, file1, &result );
++	return result;
++}
++
++// the engine's save comment: title, then time, date and time played at fixed offsets
++static bool XB_ReadSave( const char *file, xbSave_t *out )
++{
++	char comment[256];
++
++	if( !EngFuncs::GetSaveComment( file, comment ))
++		return false;
++
++	char time[CS_TIME], date[CS_TIME];
++	COM_FileBase( file, out->name, sizeof( out->name ));
++	Q_strncpy( time, comment + CS_SIZE, CS_TIME );
++	Q_strncpy( date, comment + CS_SIZE + CS_TIME, CS_TIME );
++	snprintf( out->when, sizeof( out->when ), "%s  %s", date, time );
++	snprintf( out->played, sizeof( out->played ), "%s", comment + CS_SIZE + CS_TIME * 2 );
++
++	char *title = comment, *type = NULL, *p = NULL;
++	comment[CS_SIZE - 1] = 0;
++
++	if( comment[0] == '[' && ( p = strchr( comment, ']' )))
++	{
++		*p = 0;
++		type = comment + 1;      // quick, autosave...
++		title = p + 1;
++	}
++
++	// strip trailing spaces
++	for( int len = (int)strlen( title ) - 1; len >= 0 && isspace( (unsigned char)title[len] ); len-- )
++		title[len] = 0;
++
++	const char *shown = title;
++	if( title[0] == '#' )
++	{
++		char *sp = strchr( title, ' ' );
++		if( sp ) *sp = 0;
++		shown = L( title );
++	}
++
++	if( type && !stricmp( type, "quick" ))
++		snprintf( out->title, sizeof( out->title ), "%s  -  %s", L( "Quick save" ), shown );
++	else if( type && !stricmp( type, "autosave" ))
++		snprintf( out->title, sizeof( out->title ), "%s  -  %s", L( "Autosave" ), shown );
++	else
++		snprintf( out->title, sizeof( out->title ), "%s", shown );
++
++	return true;
++}
++
++void CMenuXbSaves::Refresh()
++{
++	int numFiles = 0;
++	char **files = EngFuncs::GetFilesList( "save/*.sav", &numFiles, true );
++	int prev = list.cur;
++
++	list.count = 0;
++
++	if( saveMode && CL_IsActive( ))
++	{
++		xbSave_t &n = list.saves[list.count++];
++		memset( &n, 0, sizeof( n ));
++		Q_strncpy( n.title, L( "+  New save" ), sizeof( n.title ));
++	}
++
++	if( files && numFiles > 0 )
++	{
++		qsort( files, numFiles, sizeof( *files ), XB_CompareSaves );
++		for( int i = 0; i < numFiles && list.count < XB_SAVES_MAX; i++ )
++		{
++			if( XB_ReadSave( files[i], &list.saves[list.count] ))
++				list.count++;
++		}
++	}
++
++	list.cur = list.count ? Q_min( Q_max( prev, 0 ), list.count - 1 ) : 0;
++	if( list.cur < list.top || list.cur >= list.top + XB_SAVES_VISIBLE )
++		list.top = Q_max( 0, list.cur - XB_SAVES_VISIBLE + 1 );
++	Selected();
++}
++
++const xbSave_t *CMenuXbSaves::Current() const
++{
++	if( list.cur < 0 || list.cur >= list.count )
++		return NULL;
++	return &list.saves[list.cur];
++}
++
++void CMenuXbSaves::Selected()
++{
++	const xbSave_t *s = Current();
++
++	// the hints follow what the selected row can do
++	if( !s )
++		xbHints = L( "(B) Back" );
++	else if( !s->name[0] )
++		xbHints = L( "(A) Save     (B) Back" );
++	else if( saveMode )
++		xbHints = L( "(A) Load   (Y) Save here   (X) Delete   (B) Back" );
++	else
++		xbHints = L( "(A) Load     (X) Delete     (B) Back" );
++
++	if( !s || !s->name[0] )
++	{
++		shot.ForceUnload();
++		shotName[0] = 0;
++		list.szStatusText = s ? L( "Save your progress as a new save" ) : NULL;
++		return;
++	}
++
++	list.szStatusText = saveMode ? L( "During play, quick save with View + D-pad Up. Load it again with View + D-pad Down." )
++		: L( "Choose a save and press A to load it. During play, View + D-pad Up quick saves." );
++
++	if( strcmp( shotName, s->name ))
++	{
++		char path[128];
++		snprintf( path, sizeof( path ), "save/%s.bmp", s->name );
++		shot.ForceUnload();
++		if( EngFuncs::FileExists( path, true ))
++			shot.Load( path );
++		Q_strncpy( shotName, s->name, sizeof( shotName ));
++	}
++}
++
++void CMenuXbSaves::LoadCb()
++{
++	const xbSave_t *s = Current();
++	if( !s || !s->name[0] )
++		return;
++
++	char cmd[128];
++	snprintf( cmd, sizeof( cmd ), "load \"%s\"\n", s->name );
++	EngFuncs::StopBackgroundTrack( );
++	EngFuncs::ClientCmd( false, cmd );
++	UI_CloseMenu();
++}
++
++void CMenuXbSaves::SaveNewCb()
++{
++	// "new": the engine picks the next free name
++	EngFuncs::ClientCmd( false, "save \"new\"\n" );
++	UI_CloseMenu();
++}
++
++void CMenuXbSaves::SaveOverCb()
++{
++	const xbSave_t *s = Current();
++	if( !s || !s->name[0] )
++		return;
++
++	char cmd[128];
++	snprintf( cmd, sizeof( cmd ), "save/%s.bmp", s->name );
++	EngFuncs::PIC_Free( cmd );
++	snprintf( cmd, sizeof( cmd ), "save \"%s\"\n", s->name );
++	EngFuncs::ClientCmd( false, cmd );
++	UI_CloseMenu();
++}
++
++void CMenuXbSaves::DeleteCb()
++{
++	const xbSave_t *s = Current();
++	if( !s || !s->name[0] )
++		return;
++
++	char cmd[128];
++	snprintf( cmd, sizeof( cmd ), "save/%s.bmp", s->name );
++	EngFuncs::PIC_Free( cmd );
++	shot.ForceUnload();
++	shotName[0] = 0;
++	snprintf( cmd, sizeof( cmd ), "killsave \"%s\"\n", s->name );
++	EngFuncs::ClientCmd( true, cmd );
++	Refresh();
++}
++
++bool CMenuXbSaves::KeyDown( int key )
++{
++	if( dialog.IsVisible( ))
++		return BaseClass::KeyDown( key );
++
++	if( UI::Key::IsEnter( key ) || key == K_X_BUTTON || key == K_Y_BUTTON || key == K_DEL )
++	{
++		pressed = key;
++		return true;
++	}
++
++	bool r = BaseClass::KeyDown( key );
++	Selected();
++	return r;
++}
++
++bool CMenuXbSaves::KeyUp( int key )
++{
++	if( dialog.IsVisible( ) || key != pressed )
++		return BaseClass::KeyUp( key );
++
++	pressed = 0;
++	const xbSave_t *s = Current();
++	if( !s )
++		return true;
++
++	if( UI::Key::IsEnter( key ))
++	{
++		PlayLocalSound( uiStatic.sounds[SND_LAUNCH] );
++		if( !s->name[0] )
++			SaveNewCb();
++		else
++			LoadCb();
++	}
++	else if( key == K_Y_BUTTON && saveMode && s->name[0] )
++	{
++		dialog.onPositive = VoidCb( &CMenuXbSaves::SaveOverCb );
++		dialog.SetMessage( L( "Save over this game?" ));
++		dialog.Show();
++	}
++	else if(( key == K_X_BUTTON || key == K_DEL ) && s->name[0] )
++	{
++		dialog.onPositive = VoidCb( &CMenuXbSaves::DeleteCb );
++		dialog.SetMessage( L( "Delete this saved game?" ));
++		dialog.Show();
++	}
++	return true;
++}
++
++void CMenuXbSaves::_Init()
++{
++	list.SetRect( 72, 150, 520, XB_SAVES_VISIBLE * 58 );
++	dialog.Link( this );
++	shotName[0] = 0;
++	pressed = 0;
++
++	AddItem( banner );
++	AddItem( list );
++}
++
++void CMenuXbSaves::_VidInit()
++{
++	banner.szName = saveMode && CL_IsActive( ) ? L( "Save / Load Game" ) : L( "Load Game" );
++}
++
++void CMenuXbSaves::Reload()
++{
++	BaseClass::Reload();
++	Refresh();
++}
++
++void CMenuXbSaves::Draw()
++{
++	BaseClass::Draw();
++
++	// the selected save's screenshot, right of the list
++	int x = ( 620 * uiStatic.scaleX ) + uiStatic.xOffset;
++	int y = ( 150 * uiStatic.scaleY ) + uiStatic.yOffset;
++	int w = 340 * uiStatic.scaleX;
++	int h = w * 3 / 4;
++
++	if( shot.IsValid( ))
++	{
++		UI_FillRect( x - 3, y - 3, w + 6, h + 6, PackRGBA( 255, 165, 0, 160 ));
++		UI_DrawPic( x, y, w, h, uiColorWhite, shot );
++	}
++}
++
++static CMenuXbSaves *menu_xbsaves = NULL;
++
++static void UI_XboxSaves_Precache( void )
++{
++	menu_xbsaves = new CMenuXbSaves();
++}
++
++static void UI_XboxSaves_Shutdown( void )
++{
++	delete menu_xbsaves;
++}
++
++void UI_XboxLoad_Menu( void )
++{
++	if( EngFuncs::CheckGameDll( ))
++		menu_xbsaves->Open( false );
++}
++
++void UI_XboxSaveLoad_Menu( void )
++{
++	if( EngFuncs::CheckGameDll( ))
++		menu_xbsaves->Open( true );
++}
++
++ADD_MENU4( menu_xboxsaves, UI_XboxSaves_Precache, UI_XboxSaveLoad_Menu, UI_XboxSaves_Shutdown );
++
++#endif // XASH_UWP
 diff --git a/menus/XboxSettings.cpp b/menus/XboxSettings.cpp
 new file mode 100644
 index 0000000..4e2014a
