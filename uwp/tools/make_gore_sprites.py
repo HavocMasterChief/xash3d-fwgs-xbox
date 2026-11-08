@@ -24,7 +24,8 @@ def write_spr(name, frames):
     w, h = len(frames[0][0]), len(frames[0])
     data = bytearray()
     data += b'IDSP'
-    data += struct.pack('<iiifiiifi', 2, 2, 3, math.hypot(w, h) / 2, w, h, len(frames), 0.0, 0)
+    data += struct.pack('<iiifiiifi', 2, 2, 2,  # type VP_PARALLEL_ORIENTED, texFormat SPR_INDEXALPHA (3 would be alpha-test)
+                         math.hypot(w, h) / 2, w, h, len(frames), 0.0, 0)
     data += struct.pack('<h', 256)
     for i in range(256):
         data += bytes((255, 255, 255)) if i == 255 else bytes((i, i, i))
@@ -105,22 +106,44 @@ def pool(size, seed):
 
 
 def footprint(w, h, left):
+    """Boot sole: rounded toe, wide ball, narrow arch on the outer side, heel block, lug tread."""
+    rnd = random.Random(7 if left else 8)
+
+    def smooth(a, b, x):
+        x = max(0.0, min(1.0, (x - a) / (b - a)))
+        return x * x * (3 - 2 * x)
+
+    def profile(t):
+        """half width and centre across the sole, t = 0 toe .. 1 heel"""
+        if t < 0.3:
+            hw = 0.92 * math.sqrt(max(0.0, 1 - ((0.3 - t) / 0.3) ** 2))   # round toe to the ball
+        elif t < 0.62:
+            hw = 0.92 - 0.38 * smooth(0.36, 0.56, t)                      # ball narrowing to the arch
+        else:
+            hw = 0.54 + 0.2 * smooth(0.62, 0.72, t)                       # heel
+            hw *= math.sqrt(max(0.0, 1 - ((t - 0.8) / 0.2) ** 2)) if t > 0.8 else 1.0
+        c = 0.08 * (1 - smooth(0.1, 0.4, t)) - 0.2 * smooth(0.36, 0.56, t) * (1 - smooth(0.62, 0.72, t))
+        return hw, c
+
     img = []
     for y in range(h):
         row = []
+        t = (y + 0.5) / h
+        hw, c = profile(t)
         for x in range(w):
             u = (x + 0.5) / w * 2 - 1
-            v = (y + 0.5) / h * 2 - 1      # -1 toe .. 1 heel
             if left:
                 u = -u
-            # sole: ball (front ellipse) + heel (back ellipse), slight curve
-            ball = ((u - 0.1 * (v + 0.4)) / 0.7) ** 2 + ((v + 0.3) / 0.62) ** 2
-            heel = (u / 0.55) ** 2 + ((v - 0.62) / 0.32) ** 2
-            inside = min(ball, heel)
-            val = max(0.0, min(1.0, (1.0 - inside) / 0.25))
-            # tread lines, a little patchy
-            tread = 0.75 + 0.25 * math.sin(v * 38)
-            row.append(val * tread * 220)
+            d = (hw - abs(u - c)) / 0.12
+            val = max(0.0, min(1.0, d))
+            # heel block is a separate pad
+            if 0.6 < t < 0.65:
+                val *= 0.25
+            # lug tread: chevrons up front, bars on the heel
+            lug = math.sin((t * 2 + abs(u - c) * 0.3) * 30) if t < 0.6 else math.sin(t * 2 * 34)
+            tread = 0.35 if lug > 0.55 else 1.0
+            tread *= 0.8 + 0.2 * rnd.random()
+            row.append(val * tread * 225)
         img.append(row)
     return img
 
@@ -128,4 +151,4 @@ def footprint(w, h, left):
 write_spr('xb_splat.spr', [blob(64, s) for s in range(6)])
 write_spr('xb_drop.spr', [streak(16, 64)])
 write_spr('xb_pool.spr', [pool(128, s) for s in (11, 12, 13)])
-write_spr('xb_foot.spr', [footprint(32, 64, True), footprint(32, 64, False)])
+write_spr('xb_foot.spr', [footprint(32, 80, True), footprint(32, 80, False)])

@@ -363,6 +363,13 @@ static void IN_MouseMove( void )
 		return;
 	}
 
+#if XASH_UWP
+	// Xbox: no pointer. Feeding the menu SDL's idle pointer position gave the
+	// item under it a second, hidden "mouse" focus: it glowed while A acted on
+	// the controller's selection, and some presses only moved focus
+	return;
+#endif
+
 	// find mouse movement
 	int x, y;
 	Platform_GetMousePos( &x, &y );

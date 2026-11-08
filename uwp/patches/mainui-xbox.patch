@@ -1,65 +1,229 @@
-diff --git a/menus/Audio.cpp b/menus/Audio.cpp
-index 152fb47..2603c4a 100644
---- a/menus/Audio.cpp
-+++ b/menus/Audio.cpp
-@@ -166,7 +166,9 @@ void CMenuAudio::_Init( void )
- 	AddItem( suitVolume );
- 	AddItem( noDSP );
- 	AddItem( useAlphaDSP );
-+#if !XASH_UWP // the game is always in focus on Xbox
- 	AddItem( muteFocusLost );
-+#endif
- 	AddItem( vibrationEnable );
- 	AddItem( vibration );
- }
-diff --git a/menus/Configuration.cpp b/menus/Configuration.cpp
-index 6e0a981..411ca73 100644
---- a/menus/Configuration.cpp
-+++ b/menus/Configuration.cpp
-@@ -27,6 +27,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
- 
- #define ART_BANNER	     	"gfx/shell/head_config"
+diff --git a/BaseMenu.cpp b/BaseMenu.cpp
+index 7b727eb..c1c3874 100755
+--- a/BaseMenu.cpp
++++ b/BaseMenu.cpp
+@@ -776,6 +776,11 @@ void UI_MouseMove( int x, int y )
+ 	if( !uiStatic.initialized )
+ 		return;
  
 +#if XASH_UWP
-+void UI_XboxController_Menu( void );
-+void UI_XboxGameplay_Menu( void );
++	// Xbox: controller only, the selection is never moved by a pointer
++	return;
 +#endif
 +
- class CMenuOptions: public CMenuFramework
- {
- private:
-@@ -55,6 +60,18 @@ void CMenuOptions::_Init( void )
- 	msgBox.Link( this );
+ 	clientActive = uiStatic.client.IsActive();
+ 	menuActive = uiStatic.menu.IsActive();
  
- 	AddItem( banner );
+@@ -1205,6 +1210,10 @@ void UI_Init( void )
+ 	gMenu.m_gameinfo = *gi;
+ 
+ 	uiStatic.renderPicbuttonText = gMenu.m_gameinfo.flags & GFL_RENDER_PICBUTTON_TEXT;
 +#if XASH_UWP
-+	// Xbox: controller, audio and picture only. No keyboard/mouse, touch,
-+	// raw gamepad axis mapping, video modes or online update check.
-+	AddButton( L( "Controller" ), L( "Controller layout, look sensitivity and aim assist" ),
-+		PC_CONTROLS, UI_XboxController_Menu, QMF_NOTIFY );
-+	AddButton( L( "Gameplay" ), L( "Blood and gore, controller vibration" ),
-+		PC_GAME_OPTIONS, UI_XboxGameplay_Menu, QMF_NOTIFY );
-+	AddButton( L( "GameUI_Audio" ), L( "Change sound volume and quality" ),
-+		PC_AUDIO, UI_Audio_Menu, QMF_NOTIFY );
-+	AddButton( L( "GameUI_Video" ), L( "Change screen size, gamma and image quality" ),
-+		PC_VIDEO, UI_VidOptions_Menu, QMF_NOTIFY );
-+#else
- 	AddButton( L( "Controls" ), L( "Change keyboard and mouse settings" ),
- 		PC_CONTROLS, UI_Controls_Menu, QMF_NOTIFY );
- 	AddButton( L( "GameUI_Audio" ), L( "Change sound volume and quality" ),
-@@ -67,6 +84,7 @@ void CMenuOptions::_Init( void )
- 		PC_GAMEPAD, UI_GamePad_Menu, QMF_NOTIFY, 'g' );
- 	AddButton( L( "Update" ), L( "Check for updates" ),
- 		PC_UPDATE, msgBox.MakeOpenEvent(), QMF_NOTIFY );
++	// Xbox: buttons are text, so they can be renamed (Settings, Continue...)
++	uiStatic.renderPicbuttonText = true;
 +#endif
- 	AddButton( L( "Done" ), L( "Go back to the Main menu" ),
- 		PC_DONE, VoidCb( &CMenuOptions::Hide ), QMF_NOTIFY );
- }
+ 
+ 	// trying to load colors.lst
+ 	UI_ApplyCustomColors ();
+diff --git a/controls/CheckBox.cpp b/controls/CheckBox.cpp
+index 77d013b..9293259 100644
+--- a/controls/CheckBox.cpp
++++ b/controls/CheckBox.cpp
+@@ -114,7 +114,7 @@ void CMenuCheckBox::Draw( void )
+ 
+ 	UI_DrawString( font, m_scTextPos, m_scTextSize, szName, colorText, m_scChSize, eTextAlignment, textflags );
+ 
+-	if( szStatusText && iFlags & QMF_NOTIFY )
++	if( !XASH_UWP && szStatusText && iFlags & QMF_NOTIFY ) // Xbox: bottom bar instead
+ 	{
+ 		Point coord;
+ 
+diff --git a/controls/Field.cpp b/controls/Field.cpp
+index fd687f2..a252e74 100644
+--- a/controls/Field.cpp
++++ b/controls/Field.cpp
+@@ -386,7 +386,7 @@ void CMenuField::Draw( void )
+ 
+ 	textflags |= ETF_NOSIZELIMIT;
+ 
+-	if( szStatusText && iFlags & QMF_NOTIFY )
++	if( !XASH_UWP && szStatusText && iFlags & QMF_NOTIFY ) // Xbox: bottom bar instead
+ 	{
+ 		int	x;
+ 
+diff --git a/controls/Framework.cpp b/controls/Framework.cpp
+index 5c98231..ab49639 100644
+--- a/controls/Framework.cpp
++++ b/controls/Framework.cpp
+@@ -61,6 +61,34 @@ void CMenuFramework::Draw()
+ 		lastItem = item;
+ 	}
+ 
++#if XASH_UWP
++	// Xbox: the selected item's description always goes in a fixed bar at the
++	// bottom of the screen, never next to the item where it covers settings,
++	// with the controller hints at the right of the same bar
++	{
++		int barH = 44 * uiStatic.scaleY;
++		int barY = uiStatic.yOffset + 708 * uiStatic.scaleY;
++		int pad = 24 * uiStatic.scaleX;
++		int chH = UI_SMALL_CHAR_HEIGHT * 1.15f * uiStatic.scaleY;
++		const char *hints = L( "(A) Select     (B) Back" );
++
++		UI_FillRect( 0, barY, ScreenWidth, barH, PackRGBA( 0, 0, 0, 150 ));
++		UI_FillRect( 0, barY, ScreenWidth, 2 * uiStatic.scaleY, PackRGBA( 255, 165, 0, 180 ));
++
++		UI_DrawString( uiStatic.hDefaultFont, ScreenWidth / 2, barY, ScreenWidth / 2 - pad, barH,
++			hints, PackRGBA( 200, 200, 200, 255 ), chH, QM_RIGHT, ETF_SHADOW | ETF_NOSIZELIMIT | ETF_FORCECOL );
++
++		if( item && item->szStatusText && item->szStatusText[0] && !FBitSet( item->iFlags, QMF_GRAYED ))
++		{
++			float alpha = bound( 0, ((( uiStatic.realTime - statusFadeTime ) - 60 ) * 0.008f ), 1 );
++			UI_DrawString( uiStatic.hDefaultFont, pad, barY, ScreenWidth * 0.68f - pad, barH,
++				item->szStatusText, PackRGBA( 235, 235, 235, (int)( alpha * 255 )), chH, QM_LEFT, ETF_SHADOW | ETF_NOSIZELIMIT | ETF_FORCECOL );
++		}
++		else statusFadeTime = uiStatic.realTime;
++		return;
++	}
++#endif
++
+ 	// draw status text if status text isn't rendered at right side of an item
+ 	// ideally, framework shouldn't even know about this but since everything
+ 	// WON-styled goes here, let's leave it here...
+diff --git a/controls/ItemsHolder.cpp b/controls/ItemsHolder.cpp
+index 7be4928..8965183 100644
+--- a/controls/ItemsHolder.cpp
++++ b/controls/ItemsHolder.cpp
+@@ -331,6 +331,37 @@ void CMenuItemsHolder::Draw( )
+ {
+ 	CMenuBaseItem *item;
+ 
++#if XASH_UWP
++	// Xbox: exactly one thing looks selected, and it's what A will pick.
++	// No mouse focus at all, and the controller's cursor always shows.
++	if( m_pItems.Count( ))
++	{
++		CMenuBaseItem *cur = ItemAtCursor();
++		if( !cur || !cur->IsVisible() || FBitSet( cur->iFlags, QMF_INACTIVE | QMF_GRAYED | QMF_MOUSEONLY ))
++		{
++			FOR_EACH_VEC( m_pItems, k )
++			{
++				CMenuBaseItem *c = m_pItems[k];
++				if( c->IsVisible() && !FBitSet( c->iFlags, QMF_INACTIVE | QMF_GRAYED | QMF_MOUSEONLY | QMF_HIDDENBYPARENT ))
++				{
++					SetCursor( k, false );
++					break;
++				}
++			}
++		}
++
++		FOR_EACH_VEC( m_pItems, k )
++		{
++			CMenuBaseItem *c = m_pItems[k];
++			ClearBits( c->iFlags, QMF_HASMOUSEFOCUS );
++			if( k == m_iCursor && c->IsVisible() && !FBitSet( c->iFlags, QMF_INACTIVE ))
++				SetBits( c->iFlags, QMF_HASKEYBOARDFOCUS );
++			else
++				ClearBits( c->iFlags, QMF_HASKEYBOARDFOCUS );
++		}
++	}
++#endif
++
+ 	// draw contents
+ 	FOR_EACH_VEC( m_pItems, i )
+ 	{
+diff --git a/controls/PicButton.cpp b/controls/PicButton.cpp
+index ef9e268..487a194 100644
+--- a/controls/PicButton.cpp
++++ b/controls/PicButton.cpp
+@@ -240,7 +240,8 @@ void CMenuPicButton::Draw( )
+ 	if( iOldState == BUTTON_NOFOCUS && state != BUTTON_NOFOCUS )
+ 		iFocusStartTime = uiStatic.realTime;
+ 
+-	if( szStatusText && FBitSet( iFlags, QMF_NOTIFY ) && !FBitSet( gMenu.m_gameinfo.flags, GFL_NOSKILLS ))
++	// Xbox: descriptions go in the framework's bottom bar instead
++	if( !XASH_UWP && szStatusText && FBitSet( iFlags, QMF_NOTIFY ) && !FBitSet( gMenu.m_gameinfo.flags, GFL_NOSKILLS ))
+ 	{
+ 		Point coord;
+ 
+diff --git a/controls/Switch.cpp b/controls/Switch.cpp
+index e3e0063..4fd9017 100644
+--- a/controls/Switch.cpp
++++ b/controls/Switch.cpp
+@@ -207,7 +207,7 @@ void CMenuSwitch::Draw( void )
+ 	uint selectColor = iSelectColor;
+ 	UI_DrawString( font, m_scTextPos, m_scTextSize, szName, uiColorHelp, m_scChSize, eTextAlignment, textflags | ETF_FORCECOL );
+ 
+-	if( szStatusText && iFlags & QMF_NOTIFY )
++	if( !XASH_UWP && szStatusText && iFlags & QMF_NOTIFY ) // Xbox: bottom bar instead
+ 	{
+ 		Point coord;
+ 
 diff --git a/menus/Main.cpp b/menus/Main.cpp
-index 4d1a382..efd0857 100644
+index 4d1a382..75a6ca0 100644
 --- a/menus/Main.cpp
 +++ b/menus/Main.cpp
-@@ -133,10 +133,12 @@ bool CMenuMain::KeyDown( int key )
+@@ -31,6 +31,45 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+ #include "AnimatedBanner.h"
+ #include "MovieBanner.h"
+ 
++#if XASH_UWP
++void UI_XboxSettings_Menu( void );
++
++/*
++=================
++XB_NewestSave
++
++The most recent save of any kind (quick, auto or manual), for Continue
++=================
++*/
++static bool XB_NewestSave( char *out, size_t size )
++{
++	int numFiles = 0;
++	char **files = EngFuncs::GetFilesList( "save/*.sav", &numFiles, true );
++	const char *best = NULL;
++
++	for( int i = 0; i < numFiles; i++ )
++	{
++		char comment[256];
++
++		// skip corrupted and old-version saves
++		if( !EngFuncs::GetSaveComment( files[i], comment ))
++			continue;
++
++		int newer = 0;
++		if( best )
++			EngFuncs::CompareFileTime( files[i], best, &newer );
++		if( !best || newer > 0 )
++			best = files[i];
++	}
++
++	if( !best )
++		return false;
++
++	COM_FileBase( best, out, size );
++	return true;
++}
++#endif
++
+ #define ART_MINIMIZE_N	"gfx/shell/min_n"
+ #define ART_MINIMIZE_F	"gfx/shell/min_f"
+ #define ART_MINIMIZE_D	"gfx/shell/min_d"
+@@ -58,11 +97,13 @@ private:
+ 	void DisconnectDialogCb();
+ 	void HazardCourseDialogCb();
+ 	void HazardCourseCb();
++	void ContinueCb();
+ 
+ 	CMenuAnimatedBanner animatedBanner;
+ 	CMenuMovieBanner movieBanner;
+ 
+ 	CMenuPicButton	console;
++	CMenuPicButton	continueGame;
+ 	CMenuPicButton	resumeGame;
+ 	CMenuPicButton	disconnect;
+ 	CMenuPicButton	newGame;
+@@ -133,10 +174,12 @@ bool CMenuMain::KeyDown( int key )
  			if( !dialog.IsVisible() )
  				UI_CloseMenu();
  		}
@@ -72,19 +236,94 @@ index 4d1a382..efd0857 100644
  		return true;
  	}
  	return CMenuFramework::KeyDown( key );
-@@ -292,15 +294,19 @@ void CMenuMain::_Init( void )
+@@ -164,6 +207,21 @@ void CMenuMain::HazardCourseCb()
+ 	EngFuncs::ClientCmd( false, "hazardcourse\n" );
+ }
  
- 	AddItem( configuration );
- 	AddItem( saveRestore );
-+#if !XASH_UWP // Xbox build: single player only
- 	AddItem( multiPlayer );
++void CMenuMain::ContinueCb()
++{
++#if XASH_UWP
++	char name[64], cmd[128];
++
++	if( !XB_NewestSave( name, sizeof( name )))
++		return;
++
++	snprintf( cmd, sizeof( cmd ), "load \"%s\"\n", name );
++	EngFuncs::StopBackgroundTrack( );
++	EngFuncs::ClientCmd( false, cmd );
++	UI_CloseMenu();
++#endif
++}
++
+ void CMenuMain::_Init( void )
+ {
+ 	if( gMenu.m_gameinfo.trainmap[0] && stricmp( gMenu.m_gameinfo.trainmap, gMenu.m_gameinfo.startmap ) != 0 )
+@@ -185,6 +243,10 @@ void CMenuMain::_Init( void )
+ 		EngFuncs::KEY_SetDest( KEY_CONSOLE );
+ 	});
+ 
++	continueGame.SetNameAndStatus( L( "Continue" ), L( "Pick up from your most recent save" ));
++	continueGame.iFlags |= QMF_NOTIFY;
++	continueGame.onReleased = VoidCb( &CMenuMain::ContinueCb );
++
+ 	resumeGame.SetNameAndStatus( L( "GameUI_GameMenu_ResumeGame" ), L( "StringsList_188" ) );
+ 	resumeGame.SetPicture( PC_RESUME_GAME );
+ 	resumeGame.iFlags |= QMF_NOTIFY;
+@@ -195,7 +257,11 @@ void CMenuMain::_Init( void )
+ 	disconnect.iFlags |= QMF_NOTIFY;
+ 	disconnect.onReleased = VoidCb( &CMenuMain::DisconnectDialogCb );
+ 
++#if XASH_UWP
++	newGame.SetNameAndStatus( L( "New Game" ), L( "Start a new game" ));
++#else
+ 	newGame.SetNameAndStatus( L( "GameUI_NewGame" ), L( "StringsList_189" ) );
++#endif
+ 	newGame.SetPicture( PC_NEW_GAME );
+ 	newGame.iFlags |= QMF_NOTIFY;
+ 	newGame.onReleased = UI_NewGame_Menu;
+@@ -211,10 +277,16 @@ void CMenuMain::_Init( void )
+ 	multiPlayer.iFlags |= QMF_NOTIFY;
+ 	multiPlayer.onReleased = UI_MultiPlayer_Menu;
+ 
++#if XASH_UWP
++	configuration.SetNameAndStatus( L( "Settings" ), L( "Controller, gameplay, audio and video" ));
++	configuration.iFlags |= QMF_NOTIFY;
++	configuration.onReleased = UI_XboxSettings_Menu;
++#else
+ 	configuration.SetNameAndStatus( L( "GameUI_Options" ), L( "StringsList_193" ) );
+ 	configuration.SetPicture( PC_CONFIG );
+ 	configuration.iFlags |= QMF_NOTIFY;
+ 	configuration.onReleased = UI_Options_Menu;
 +#endif
  
- 	if ( bCustomGame )
- 		AddItem( customGame );
+ 	saveRestore.iFlags |= QMF_NOTIFY;
+ 
+@@ -282,6 +354,20 @@ void CMenuMain::_Init( void )
+ 	dialog.Link( this );
+ 
+ 	AddItem( banner );
++#if XASH_UWP
++	// Xbox: Continue, New Game, Load Game, Hazard Course, Settings, Quit.
++	// No console, previews or multiplayer. Order here is the d-pad order.
++	AddItem( resumeGame );
++	AddItem( continueGame );
++	AddItem( newGame );
++	AddItem( saveRestore );
++	if ( bTrainMap )
++		AddItem( hazardCourse );
++	AddItem( configuration );
++	if ( bCustomGame )
++		AddItem( customGame );
++	AddItem( quit );
++#else
+ 	AddItem( console );
+ 	AddItem( disconnect );
+ 	AddItem( resumeGame );
+@@ -299,8 +385,11 @@ void CMenuMain::_Init( void )
  
  	AddItem( previews );
  	AddItem( quit );
++#endif
 +#if !XASH_UWP // Xbox build: no desktop window to minimize or close
  	AddItem( minimizeBtn );
  	AddItem( quitButton );
@@ -92,7 +331,61 @@ index 4d1a382..efd0857 100644
  }
  
  /*
-@@ -334,8 +340,10 @@ void CMenuMain::VidInit( bool connected )
+@@ -310,6 +399,53 @@ UI_Main_Init
+ */
+ void CMenuMain::VidInit( bool connected )
+ {
++#if XASH_UWP
++	{
++		// top to bottom, ending above the description bar
++		int x = ( 70 / 640.0 ) * 1024.0;
++		int gap = (( 404 - 373 ) / 480.0 ) * 768.0;
++		char name[64];
++		bool canContinue = !connected && EngFuncs::CheckGameDll() && XB_NewestSave( name, sizeof( name ));
++		bool single = gpGlobals->maxClients < 2;
++
++		CMenuPicButton *order[] = { &resumeGame, &continueGame, &newGame, &saveRestore,
++			bTrainMap ? &hazardCourse : NULL, &configuration, bCustomGame ? &customGame : NULL, &quit };
++		bool shown[] = { connected, canContinue, true, true, bTrainMap, true, bCustomGame, true };
++
++		int n = 0;
++		for( size_t i = 0; i < V_ARRAYSIZE( order ); i++ )
++			if( order[i] && shown[i] ) n++;
++
++		int y = 640 - ( n - 1 ) * gap;
++		for( size_t i = 0; i < V_ARRAYSIZE( order ); i++ )
++		{
++			if( !order[i] )
++				continue;
++			order[i]->SetVisibility( shown[i] );
++			if( !shown[i] )
++				continue;
++			order[i]->SetCoord( x, y );
++			y += gap;
++		}
++
++		console.Hide();
++		previews.Hide();
++		disconnect.SetVisibility( connected && !single );
++
++		// in a game, saving and loading share one screen
++		if( connected && single )
++		{
++			saveRestore.SetNameAndStatus( L( "Save / Load Game" ), L( "Save your progress or load a saved game" ));
++			saveRestore.onReleased = UI_SaveLoad_Menu;
++		}
++		else
++		{
++			saveRestore.SetNameAndStatus( L( "Load Game" ), L( "Load a saved game" ));
++			saveRestore.onReleased = UI_LoadGame_Menu;
++		}
++		return;
++	}
++#endif
+ 	int hoffset = ( 70 / 640.0 ) * 1024.0;
+ 
+ 	// in original menu Previews is located at specific point
+@@ -334,8 +470,10 @@ void CMenuMain::VidInit( bool connected )
  		yoffset -= ygap;
  	}
  
@@ -103,35 +396,319 @@ index 4d1a382..efd0857 100644
  
  	bool single = gpGlobals->maxClients < 2;
  
-diff --git a/menus/VideoOptions.cpp b/menus/VideoOptions.cpp
-index 69dd50a..cb6e333 100644
---- a/menus/VideoOptions.cpp
-+++ b/menus/VideoOptions.cpp
-@@ -278,12 +278,16 @@ void CMenuVidOptions::_Init( void )
- 	AddItem( gammaIntensity );
- 	AddItem( brightness );
- 	AddItem( detailtex );
-+#if !XASH_UWP // Xbox: world VBO is glitchy, software water and the test image don't apply
- 	AddItem( vbo );
- 	AddItem( swwater );
-+#endif
- 	AddItem( overbright );
- 	AddItem( filtering );
- 	AddItem( hudscale );
-+#if !XASH_UWP
- 	AddItem( testImage );
-+#endif
+@@ -394,7 +532,11 @@ void CMenuMain::_VidInit()
  
- #if LEGACY_VIEWSIZE
- 	screenSize.LinkCvar( "viewsize" );
-diff --git a/menus/XboxController.cpp b/menus/XboxController.cpp
+ void CMenuMain::Think()
+ {
++#if XASH_UWP
++	if( 0 )
++#else
+ 	if( gpGlobals->developer )
++#endif
+ 	{
+ 		if( !console.IsVisible( ))
+ 			console.Show();
+diff --git a/menus/XboxRows.cpp b/menus/XboxRows.cpp
 new file mode 100644
-index 0000000..eba303f
+index 0000000..d0fa16e
 --- /dev/null
-+++ b/menus/XboxController.cpp
-@@ -0,0 +1,126 @@
++++ b/menus/XboxRows.cpp
+@@ -0,0 +1,287 @@
 +/*
-+XboxController.cpp - controller settings menu for the Xbox build
++XboxRows.cpp - controller-friendly settings rows for the Xbox build
++Copyright (C) 2026 HavocMasterChief
++
++This program is free software; you can redistribute it and/or
++modify it under the terms of the GNU General Public License
++as published by the Free Software Foundation; either version 2
++of the License, or (at your option) any later version.
++
++This program is distributed in the hope that it will be useful,
++but WITHOUT ANY WARRANTY; without even the implied warranty of
++MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
++See the GNU General Public License for more details.
++*/
++
++#if XASH_UWP
++
++#include "BaseMenu.h"
++#include "Utils.h"
++#include "XboxRows.h"
++
++#include <math.h>
++#include <stdio.h>
++
++// colours: Half-Life orange on dark glass
++#define XB_ROW_BG        PackRGBA( 0, 0, 0, 120 )
++#define XB_ROW_BG_FOCUS  PackRGBA( 255, 150, 0, 60 )
++#define XB_ROW_ACCENT    PackRGBA( 255, 165, 0, 255 )
++#define XB_TEXT          PackRGBA( 215, 215, 215, 255 )
++#define XB_TEXT_FOCUS    PackRGBA( 255, 200, 90, 255 )
++#define XB_TEXT_GRAY     PackRGBA( 110, 110, 110, 255 )
++#define XB_BAR_BG        PackRGBA( 60, 60, 60, 200 )
++#define XB_BAR_FILL      PackRGBA( 255, 160, 0, 230 )
++
++CMenuXbRow::CMenuXbRow() : BaseClass()
++{
++	kind = BUTTON;
++	cvar = NULL;
++	inverted = percent = false;
++	names = NULL;
++	values = NULL;
++	count = 0;
++	value = vmin = 0.0f;
++	vmax = vstep = 1.0f;
++	pressed = false;
++	charSize = UI_MED_CHAR_HEIGHT;
++	size.w = ROW_W;
++	size.h = ROW_H;
++}
++
++void CMenuXbRow::SetupButton( const char *name, const char *status, CEventCallback cb )
++{
++	SetNameAndStatus( name, status );
++	kind = BUTTON;
++	onActivate = cb;
++}
++
++void CMenuXbRow::SetupToggle( const char *name, const char *status, const char *cv, bool inv )
++{
++	SetNameAndStatus( name, status );
++	kind = TOGGLE;
++	cvar = cv;
++	inverted = inv;
++}
++
++void CMenuXbRow::SetupList( const char *name, const char *status, const char *cv, const char **n, const float *v, int c )
++{
++	SetNameAndStatus( name, status );
++	kind = LIST;
++	cvar = cv;
++	names = n;
++	values = v;
++	count = c;
++}
++
++void CMenuXbRow::SetupSlider( const char *name, const char *status, const char *cv, float mn, float mx, float st, bool pct )
++{
++	SetNameAndStatus( name, status );
++	kind = SLIDER;
++	cvar = cv;
++	vmin = mn;
++	vmax = mx;
++	vstep = st;
++	percent = pct;
++}
++
++void CMenuXbRow::ReadCvar()
++{
++	if( cvar )
++		value = EngFuncs::GetCvarFloat( cvar );
++}
++
++void CMenuXbRow::WriteCvar()
++{
++	if( cvar )
++		EngFuncs::CvarSetValue( cvar, value );
++}
++
++int CMenuXbRow::ValueIndex() const
++{
++	int best = 0;
++	float bestDist = 1e9f;
++
++	for( int i = 0; i < count; i++ )
++	{
++		float v = values ? values[i] : (float)i;
++		float d = fabs( v - value );
++		if( d < bestDist ) { bestDist = d; best = i; }
++	}
++	return best;
++}
++
++void CMenuXbRow::VidInit()
++{
++	BaseClass::VidInit();
++	ReadCvar();
++}
++
++void CMenuXbRow::Reload()
++{
++	BaseClass::Reload();
++	ReadCvar();
++}
++
++void CMenuXbRow::Change( int dir )
++{
++	switch( kind )
++	{
++	case TOGGLE:
++		value = ( value != 0.0f ) ? 0.0f : 1.0f;
++		break;
++	case LIST:
++	{
++		int i = ( ValueIndex() + dir + count ) % count;
++		value = values ? values[i] : (float)i;
++		break;
++	}
++	case SLIDER:
++	{
++		float v = value + dir * vstep;
++		v = floorf( v / vstep + 0.5f ) * vstep;
++		if( v < vmin ) v = vmin;
++		if( v > vmax ) v = vmax;
++		if( v == value )
++			return; // already at the end: no sound
++		value = v;
++		break;
++	}
++	default:
++		return;
++	}
++
++	WriteCvar();
++	PlayLocalSound( uiStatic.sounds[SND_MOVE] );
++	_Event( QM_CHANGED );
++}
++
++bool CMenuXbRow::KeyDown( int key )
++{
++	if( UI::Key::IsLeftArrow( key ) || UI::Key::IsRightArrow( key ))
++	{
++		if( kind == BUTTON )
++			return false;
++		Change( UI::Key::IsLeftArrow( key ) ? -1 : 1 );
++		return true;
++	}
++
++	if( UI::Key::IsEnter( key ))
++	{
++		pressed = true;
++		return true;
++	}
++
++	return false;
++}
++
++bool CMenuXbRow::KeyUp( int key )
++{
++	if( UI::Key::IsLeftArrow( key ) || UI::Key::IsRightArrow( key ))
++		return kind != BUTTON;
++
++	if( !UI::Key::IsEnter( key ))
++		return false;
++
++	// only a press that started on this row counts, so the release of the
++	// A that opened this menu can't also pick something in it
++	if( !pressed )
++		return true;
++	pressed = false;
++
++	if( kind == BUTTON )
++	{
++		PlayLocalSound( uiStatic.sounds[SND_LAUNCH] );
++		onActivate( this );
++	}
++	else if( kind == TOGGLE || kind == LIST )
++	{
++		Change( 1 );
++	}
++	return true;
++}
++
++void CMenuXbRow::Draw()
++{
++	bool focus = ( iFlags & ( QMF_HASKEYBOARDFOCUS | QMF_HASMOUSEFOCUS )) != 0;
++	bool grayed = ( iFlags & QMF_GRAYED ) != 0;
++	unsigned int textCol = grayed ? XB_TEXT_GRAY : ( focus ? XB_TEXT_FOCUS : XB_TEXT );
++	int pad = 16 * uiStatic.scaleX;
++
++	if( !focus )
++		pressed = false;
++
++	// the row
++	UI_FillRect( m_scPos, m_scSize, focus ? XB_ROW_BG_FOCUS : XB_ROW_BG );
++	if( focus )
++		UI_FillRect( m_scPos.x, m_scPos.y, 6 * uiStatic.scaleX, m_scSize.h, XB_ROW_ACCENT );
++
++	// label, left
++	Point lp( m_scPos.x + pad, m_scPos.y );
++	Size ls( m_scSize.w * 0.55f - pad, m_scSize.h );
++	UI_DrawString( font, lp, ls, szName, textCol, m_scChSize, QM_LEFT, ETF_SHADOW | ETF_NOSIZELIMIT | ETF_FORCECOL );
++
++	if( kind == BUTTON )
++	{
++		// a chevron says "opens something"
++		Point vp( m_scPos.x + m_scSize.w * 0.55f, m_scPos.y );
++		Size vs( m_scSize.w * 0.45f - pad, m_scSize.h );
++		UI_DrawString( font, vp, vs, ">", textCol, m_scChSize, QM_RIGHT, ETF_SHADOW | ETF_NOSIZELIMIT | ETF_FORCECOL );
++		return;
++	}
++
++	// value, right half of the same row
++	Point vp( m_scPos.x + m_scSize.w * 0.55f, m_scPos.y );
++	Size vs( m_scSize.w * 0.45f - pad, m_scSize.h );
++	char buf[64];
++
++	if( kind == SLIDER )
++	{
++		float frac = ( vmax > vmin ) ? ( value - vmin ) / ( vmax - vmin ) : 0.0f;
++		if( frac < 0.0f ) frac = 0.0f;
++		if( frac > 1.0f ) frac = 1.0f;
++
++		if( percent )
++			snprintf( buf, sizeof( buf ), "%d%%", (int)( frac * 100.0f + 0.5f ));
++		else
++			snprintf( buf, sizeof( buf ), "%.2f", value );
++
++		int numW = 70 * uiStatic.scaleX;
++		int barH = 10 * uiStatic.scaleY;
++		Point bp( vp.x, m_scPos.y + ( m_scSize.h - barH ) / 2 );
++		Size bs( vs.w - numW - 12 * uiStatic.scaleX, barH );
++
++		UI_FillRect( bp, bs, XB_BAR_BG );
++		UI_FillRect( bp.x, bp.y, bs.w * frac, bs.h, grayed ? XB_TEXT_GRAY : XB_BAR_FILL );
++
++		Point np( vp.x + vs.w - numW, m_scPos.y );
++		Size ns( numW, m_scSize.h );
++		UI_DrawString( font, np, ns, buf, textCol, m_scChSize, QM_RIGHT, ETF_SHADOW | ETF_NOSIZELIMIT | ETF_FORCECOL );
++		return;
++	}
++
++	const char *text;
++	if( kind == TOGGLE )
++		text = (( value != 0.0f ) != inverted ) ? L( "On" ) : L( "Off" );
++	else
++		text = ( count > 0 ) ? names[ValueIndex()] : "";
++
++	// arrows only on the selected row, where left/right do something
++	if( focus )
++		snprintf( buf, sizeof( buf ), "<  %s  >", text );
++	else
++		snprintf( buf, sizeof( buf ), "%s", text );
++
++	UI_DrawString( font, vp, vs, buf, textCol, m_scChSize, QM_RIGHT, ETF_SHADOW | ETF_NOSIZELIMIT | ETF_FORCECOL );
++}
++
++int XbRows_Layout( CMenuXbRow **rows, int count, int y )
++{
++	for( int i = 0; i < count; i++ )
++	{
++		rows[i]->SetRect( CMenuXbRow::ROW_X, y, CMenuXbRow::ROW_W, CMenuXbRow::ROW_H );
++		y += CMenuXbRow::ROW_H + CMenuXbRow::ROW_GAP;
++	}
++	return y;
++}
++
++#endif // XASH_UWP
+diff --git a/menus/XboxRows.h b/menus/XboxRows.h
+new file mode 100644
+index 0000000..026b75d
+--- /dev/null
++++ b/menus/XboxRows.h
+@@ -0,0 +1,84 @@
++/*
++XboxRows.h - controller-friendly settings rows for the Xbox build
 +Copyright (C) 2026 HavocMasterChief
 +
 +This program is free software; you can redistribute it and/or
@@ -144,211 +721,321 @@ index 0000000..eba303f
 +MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 +See the GNU General Public License for more details.
 +
-+Replaces the keyboard/mouse "Controls" screen: a picture of the
-+controller with what each button does, plus the controller options.
-+The cvars live in the engine (engine/client/input/in_joy.c).
++One setting per full-width row: the label on the left, the value on the
++right of the same row ("Aim assist   < Medium >"). Up/down moves between
++rows, left/right changes the value, A toggles or opens, B goes back. The
++selected row is highlighted, and its description shows in the fixed bar
++at the bottom of the screen (CMenuFramework::Draw), never over a setting.
++
++Values are written to the cvar the moment they change.
++*/
++
++#pragma once
++#ifndef XBOX_ROWS_H
++#define XBOX_ROWS_H
++
++#if XASH_UWP
++
++#include "BaseItem.h"
++
++class CMenuXbRow : public CMenuBaseItem
++{
++public:
++	typedef CMenuBaseItem BaseClass;
++
++	enum Kind { BUTTON, TOGGLE, LIST, SLIDER };
++
++	CMenuXbRow();
++
++	// A opens/does something
++	void SetupButton( const char *name, const char *status, CEventCallback cb );
++	// On/Off; inverted: the cvar is 1 when the row reads Off
++	void SetupToggle( const char *name, const char *status, const char *cvar, bool inverted = false );
++	// one of several names; values[] are the cvar values (NULL: 0, 1, 2...)
++	void SetupList( const char *name, const char *status, const char *cvar, const char **names, const float *values, int count );
++	// a bar from min to max; percent shows 0-100% instead of the number
++	void SetupSlider( const char *name, const char *status, const char *cvar, float min, float max, float step, bool percent );
++
++	void VidInit() override;
++	void Reload() override;
++	bool KeyDown( int key ) override;
++	bool KeyUp( int key ) override;
++	void Draw() override;
++
++	CEventCallback onActivate;
++
++	// rows are laid out top to bottom from here, ROW_H apart
++	static const int ROW_X = 72;
++	static const int ROW_W = 620;
++	static const int ROW_H = 46;
++	static const int ROW_GAP = 6;
++
++private:
++	void Change( int dir );
++	void ReadCvar();
++	void WriteCvar();
++	int ValueIndex() const;
++
++	Kind kind;
++	const char *cvar;
++	bool inverted, percent;
++	const char **names;
++	const float *values;
++	int count;
++	float value, vmin, vmax, vstep;
++	bool pressed;
++};
++
++// place rows one under another starting at y; returns the y after the last one
++int XbRows_Layout( CMenuXbRow **rows, int count, int y );
++
++#endif // XASH_UWP
++#endif // XBOX_ROWS_H
+diff --git a/menus/XboxSettings.cpp b/menus/XboxSettings.cpp
+new file mode 100644
+index 0000000..4e2014a
+--- /dev/null
++++ b/menus/XboxSettings.cpp
+@@ -0,0 +1,242 @@
++/*
++XboxSettings.cpp - the Xbox build's Settings menus
++Copyright (C) 2026 HavocMasterChief
++
++This program is free software; you can redistribute it and/or
++modify it under the terms of the GNU General Public License
++as published by the Free Software Foundation; either version 2
++of the License, or (at your option) any later version.
++
++This program is distributed in the hope that it will be useful,
++but WITHOUT ANY WARRANTY; without even the implied warranty of
++MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
++See the GNU General Public License for more details.
++
++Settings
++  Controller   layout picture, look sensitivity, aim assist, invert,
++               toggle crouch, quick turn, auto-aim, vibration
++  Gameplay     blood, ragdolls
++  Audio        game, music and HEV suit volume, room echo
++  Video        gamma, brightness, detail textures, overbrights, filtering
++
++Every screen is a list of CMenuXbRow (XboxRows.cpp): one setting per row,
++changed with left/right, written at once. B or Back saves the config.
 +*/
 +
 +#if XASH_UWP
 +
 +#include "Framework.h"
 +#include "Bitmap.h"
-+#include "PicButton.h"
-+#include "Slider.h"
-+#include "CheckBox.h"
-+#include "SpinControl.h"
-+#include "StringArrayModel.h"
++#include "XboxRows.h"
 +
-+#define ART_BANNER     "gfx/shell/head_gamepad"
-+#define ART_CONTROLLER "gfx/shell/xbox_controller.png"
++#define XB_ROWS_TOP 150
++#define XB_MAX_ROWS 12
 +
-+class CMenuXboxController : public CMenuFramework
-+{
-+public:
-+	typedef CMenuFramework BaseClass;
-+	CMenuXboxController() : CMenuFramework( "CMenuXboxController" ) { }
-+
-+private:
-+	void _Init() override;
-+	void _VidInit() override;
-+	void SaveAndPopMenu() override;
-+
-+	CMenuBitmap   picture;
-+	CMenuSlider   lookSens;
-+	CMenuSpinControl aimAssist;
-+	CMenuCheckBox invertLook;
-+	CMenuCheckBox toggleCrouch;
-+	CMenuCheckBox quickTurn;
-+	CMenuCheckBox autoAim;
-+};
-+
-+void CMenuXboxController::SaveAndPopMenu()
-+{
-+	lookSens.WriteCvar();
-+	aimAssist.WriteCvar();
-+	invertLook.WriteCvar();
-+	toggleCrouch.WriteCvar();
-+	quickTurn.WriteCvar();
-+	autoAim.WriteCvar();
-+
-+	CMenuFramework::SaveAndPopMenu();
-+}
-+
-+void CMenuXboxController::_Init()
-+{
-+	static const char *aimAssistNames[] = { "Off", "Low", "Medium", "High" };
-+	static CStringArrayModel aimAssistModel( aimAssistNames, V_ARRAYSIZE( aimAssistNames ));
-+
-+	banner.SetPicture( ART_BANNER );
-+
-+	picture.SetPicture( ART_CONTROLLER );
-+	picture.iFlags = QMF_INACTIVE;
-+	picture.SetRect( 330, 150, 660, 330 );
-+
-+	lookSens.SetNameAndStatus( L( "Look sensitivity" ), L( "How fast the right stick turns the view" ));
-+	lookSens.Setup( 0.25f, 3.0f, 0.05f );
-+	lookSens.onChanged = CMenuEditable::WriteCvarCb;
-+	lookSens.SetCoord( 330, 540 );
-+	lookSens.size.w = 300;
-+
-+	aimAssist.SetNameAndStatus( L( "Aim assist" ), L( "Slows and nudges your aim when it crosses an enemy" ));
-+	aimAssist.Setup( &aimAssistModel );
-+	aimAssist.onChanged = CMenuEditable::WriteCvarCb;
-+	aimAssist.SetRect( 700, 540, 260, 32 );
-+
-+	invertLook.SetNameAndStatus( L( "Invert look" ), L( "Push the right stick up to look down" ));
-+	invertLook.onChanged = CMenuEditable::WriteCvarCb;
-+	invertLook.SetCoord( 330, 610 );
-+
-+	toggleCrouch.SetNameAndStatus( L( "Toggle crouch" ), L( "Press B once to crouch, again to stand, instead of holding it" ));
-+	toggleCrouch.onChanged = CMenuEditable::WriteCvarCb;
-+	toggleCrouch.SetCoord( 560, 610 );
-+
-+	quickTurn.SetNameAndStatus( L( "Quick turn" ), L( "Turning speeds up when the right stick is held fully sideways" ));
-+	quickTurn.onChanged = CMenuEditable::WriteCvarCb;
-+	quickTurn.SetCoord( 790, 610 );
-+
-+	autoAim.SetNameAndStatus( L( "Auto-aim" ), L( "Half-Life's own auto-aim: shots bend slightly toward enemies" ));
-+	autoAim.onChanged = CMenuEditable::WriteCvarCb;
-+	autoAim.SetCoord( 330, 670 );
-+
-+	AddItem( banner );
-+	AddButton( L( "Done" ), L( "Go back to the previous menu" ), PC_DONE, VoidCb( &CMenuXboxController::SaveAndPopMenu ), QMF_NOTIFY );
-+	AddItem( picture );
-+	AddItem( lookSens );
-+	AddItem( aimAssist );
-+	AddItem( invertLook );
-+	AddItem( toggleCrouch );
-+	AddItem( quickTurn );
-+	AddItem( autoAim );
-+}
-+
-+void CMenuXboxController::_VidInit()
-+{
-+	lookSens.LinkCvar( "joy_look_sens" );
-+	aimAssist.LinkCvar( "joy_aimassist", CMenuEditable::CVAR_VALUE );
-+	invertLook.LinkCvar( "joy_invert" );
-+	toggleCrouch.LinkCvar( "joy_crouch_toggle" );
-+	quickTurn.LinkCvar( "joy_quickturn" );
-+	autoAim.LinkCvar( "sv_aim" );
-+}
-+
-+ADD_MENU( menu_xbox_controller, CMenuXboxController, UI_XboxController_Menu );
-+
-+#endif // XASH_UWP
-diff --git a/menus/XboxGameplay.cpp b/menus/XboxGameplay.cpp
-new file mode 100644
-index 0000000..1356d8b
---- /dev/null
-+++ b/menus/XboxGameplay.cpp
-@@ -0,0 +1,90 @@
 +/*
-+XboxGameplay.cpp - gameplay options for the Xbox build
-+Copyright (C) 2026 HavocMasterChief
++=================
++CMenuXbScreen
 +
-+This program is free software; you can redistribute it and/or
-+modify it under the terms of the GNU General Public License
-+as published by the Free Software Foundation; either version 2
-+of the License, or (at your option) any later version.
-+
-+This program is distributed in the hope that it will be useful,
-+but WITHOUT ANY WARRANTY; without even the implied warranty of
-+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-+See the GNU General Public License for more details.
-+
-+Blood mode (xb_blood, game DLL dlls/xb_gore.cpp), ragdolls (xb_ragdoll,
-+client cl_dll/xb_ragdoll.cpp) and controller vibration.
++A titled screen of rows. Leaving it (B or the Back row) writes config.cfg.
++=================
 +*/
-+
-+#if XASH_UWP
-+
-+#include "Framework.h"
-+#include "PicButton.h"
-+#include "CheckBox.h"
-+#include "SpinControl.h"
-+#include "StringArrayModel.h"
-+
-+#define ART_BANNER "gfx/shell/head_config"
-+
-+class CMenuXboxGameplay : public CMenuFramework
++class CMenuXbScreen : public CMenuFramework
 +{
 +public:
 +	typedef CMenuFramework BaseClass;
-+	CMenuXboxGameplay() : CMenuFramework( "CMenuXboxGameplay" ) { }
++	CMenuXbScreen( const char *name ) : CMenuFramework( name ), numRows( 0 ), title( NULL ) { }
 +
-+private:
-+	void _Init() override;
-+	void _VidInit() override;
-+	void SaveAndPopMenu() override;
++	void Hide() override
++	{
++		EngFuncs::ClientCmd( false, "host_writeconfig\n" );
++		BaseClass::Hide();
++	}
 +
-+	CMenuSpinControl blood;
-+	CMenuCheckBox vibration;
-+	CMenuCheckBox ragdolls;
++protected:
++	CMenuXbRow *NewRow()
++	{
++		return &rows[numRows++];
++	}
++
++	void BackRow()
++	{
++		CMenuXbRow *r = NewRow();
++		r->SetupButton( L( "Back" ), L( "Go back to the previous menu" ), VoidCb( &CMenuXbScreen::Hide ));
++	}
++
++	// call at the end of _Init
++	void AddRows( int top = XB_ROWS_TOP )
++	{
++		CMenuXbRow *list[XB_MAX_ROWS];
++		for( int i = 0; i < numRows; i++ )
++			list[i] = &rows[i];
++		XbRows_Layout( list, numRows, top );
++
++		if( title )
++			banner.szName = title;
++		AddItem( banner );
++		for( int i = 0; i < numRows; i++ )
++			AddItem( rows[i] );
++	}
++
++	CMenuXbRow rows[XB_MAX_ROWS];
++	int numRows;
++	const char *title;
 +};
 +
-+void CMenuXboxGameplay::SaveAndPopMenu()
++/*
++=================
++Controller layout: just the picture
++=================
++*/
++class CMenuXbLayout : public CMenuXbScreen
 +{
-+	blood.WriteCvar();
-+	vibration.WriteCvar();
-+	ragdolls.WriteCvar();
-+	CMenuFramework::SaveAndPopMenu();
-+}
++public:
++	CMenuXbLayout() : CMenuXbScreen( "CMenuXbLayout" ) { }
++private:
++	void _Init() override
++	{
++		title = L( "Controller layout" );
 +
-+void CMenuXboxGameplay::_Init()
++		picture.SetPicture( "gfx/shell/xbox_controller.png" );
++		picture.iFlags = QMF_INACTIVE;
++		picture.SetRect( 72, 130, 880, 440 );
++
++		BackRow();
++		AddRows( 600 );
++		AddItem( picture );
++	}
++	CMenuBitmap picture;
++};
++ADD_MENU( menu_xbox_layout, CMenuXbLayout, UI_XboxLayout_Menu );
++
++/*
++=================
++Controller
++=================
++*/
++class CMenuXbController : public CMenuXbScreen
 +{
-+	static const char *bloodNames[] = { "Disabled", "Default", "Green", "Extreme" };
-+	static CStringArrayModel bloodModel( bloodNames, V_ARRAYSIZE( bloodNames ));
++public:
++	CMenuXbController() : CMenuXbScreen( "CMenuXbController" ) { }
++private:
++	void _Init() override
++	{
++		static const char *aimNames[] = { "Off", "Low", "Medium", "High" };
 +
-+	banner.SetPicture( ART_BANNER );
++		title = L( "Controller" );
 +
-+	blood.SetNameAndStatus( L( "Blood" ),
-+		L( "Default: pools under bodies. Green: alien-coloured blood. Extreme: spurts, wall runs, ceiling drips, blood on screen" ));
-+	blood.Setup( &bloodModel );
-+	blood.onChanged = CMenuEditable::WriteCvarCb;
-+	blood.SetRect( 330, 280, 300, 32 );
++		NewRow()->SetupButton( L( "Controller layout" ), L( "See what every button does" ), UI_XboxLayout_Menu );
++		NewRow()->SetupSlider( L( "Look sensitivity" ), L( "How fast the right stick turns the view" ), "joy_look_sens", 0.25f, 3.0f, 0.05f, false );
++		NewRow()->SetupList( L( "Aim assist" ), L( "Slows and nudges your aim when it crosses an enemy" ), "joy_aimassist", aimNames, NULL, 4 );
++		NewRow()->SetupToggle( L( "Invert look" ), L( "Push the right stick up to look down" ), "joy_invert" );
++		NewRow()->SetupToggle( L( "Toggle crouch" ), L( "Press B once to crouch and again to stand, instead of holding it" ), "joy_crouch_toggle" );
++		NewRow()->SetupToggle( L( "Quick turn" ), L( "Turning speeds up when the right stick is held fully sideways" ), "joy_quickturn" );
++		NewRow()->SetupToggle( L( "Auto-aim" ), L( "Half-Life's own auto-aim: shots bend slightly toward enemies" ), "sv_aim" );
++		NewRow()->SetupToggle( L( "Vibration" ), L( "Rumble when firing, taking damage and from explosions" ), "vibration_enable" );
++		BackRow();
++		AddRows();
++	}
++};
++ADD_MENU( menu_xbox_controller, CMenuXbController, UI_XboxController_Menu );
 +
-+	vibration.SetNameAndStatus( L( "Controller vibration" ), L( "Rumble when firing, taking damage and from explosions" ));
-+	vibration.onChanged = CMenuEditable::WriteCvarCb;
-+	vibration.SetCoord( 330, 360 );
-+
-+	ragdolls.SetNameAndStatus( L( "Ragdolls" ), L( "Human bodies fall and tumble with physics instead of playing a death animation" ));
-+	ragdolls.onChanged = CMenuEditable::WriteCvarCb;
-+	ragdolls.SetCoord( 330, 420 );
-+
-+	AddItem( banner );
-+	AddButton( L( "Done" ), L( "Go back to the previous menu" ), PC_DONE, VoidCb( &CMenuXboxGameplay::SaveAndPopMenu ), QMF_NOTIFY );
-+	AddItem( blood );
-+	AddItem( vibration );
-+	AddItem( ragdolls );
-+}
-+
-+void CMenuXboxGameplay::_VidInit()
++/*
++=================
++Gameplay
++=================
++*/
++class CMenuXbGameplay : public CMenuXbScreen
 +{
-+	blood.LinkCvar( "xb_blood", CMenuEditable::CVAR_VALUE );
-+	vibration.LinkCvar( "vibration_enable" );
-+	ragdolls.LinkCvar( "xb_ragdoll" );
-+}
++public:
++	CMenuXbGameplay() : CMenuXbScreen( "CMenuXbGameplay" ) { }
++private:
++	void _Init() override
++	{
++		static const char *bloodNames[] = { "Disabled", "Default", "Green", "Extreme" };
 +
-+ADD_MENU( menu_xbox_gameplay, CMenuXboxGameplay, UI_XboxGameplay_Menu );
++		title = L( "Gameplay" );
++
++		NewRow()->SetupList( L( "Blood" ),
++			L( "Default: droplets and pools. Green: alien-coloured. Extreme: spurts, wall runs, drips, blood on screen" ),
++			"xb_blood", bloodNames, NULL, 4 );
++		NewRow()->SetupToggle( L( "Ragdolls" ), L( "Bodies fall and tumble with physics instead of playing a death animation" ), "xb_ragdoll" );
++		BackRow();
++		AddRows();
++	}
++};
++ADD_MENU( menu_xbox_gameplay, CMenuXbGameplay, UI_XboxGameplay_Menu );
++
++/*
++=================
++Audio
++=================
++*/
++class CMenuXbAudio : public CMenuXbScreen
++{
++public:
++	CMenuXbAudio() : CMenuXbScreen( "CMenuXbAudio" ) { }
++private:
++	void _Init() override
++	{
++		title = L( "Audio" );
++
++		NewRow()->SetupSlider( L( "Game volume" ), L( "Weapons, voices and everything else in the world" ), "volume", 0.0f, 1.0f, 0.05f, true );
++		NewRow()->SetupSlider( L( "Music volume" ), L( "The soundtrack" ), "MP3Volume", 0.0f, 1.0f, 0.05f, true );
++		NewRow()->SetupSlider( L( "HEV suit volume" ), L( "The suit's voice: health, ammo and hazard warnings" ), "suitvolume", 0.0f, 1.0f, 0.05f, true );
++		NewRow()->SetupToggle( L( "Room echo" ), L( "Echo and reverb that change with the size of the room" ), "room_off", true );
++		BackRow();
++		AddRows();
++	}
++};
++ADD_MENU( menu_xbox_audio, CMenuXbAudio, UI_XboxAudio_Menu );
++
++/*
++=================
++Video
++=================
++*/
++class CMenuXbVideo : public CMenuXbScreen
++{
++public:
++	CMenuXbVideo() : CMenuXbScreen( "CMenuXbVideo" ) { }
++private:
++	void _Init() override
++	{
++		title = L( "Video" );
++
++		// same ranges as the stock menu: gamma 1.8-3.0, brightness 0-3
++		NewRow()->SetupSlider( L( "Gamma" ), L( "Overall light level of the picture" ), "gamma", 1.8f, 3.0f, 0.06f, true );
++		NewRow()->SetupSlider( L( "Brightness" ), L( "Lifts the dark areas" ), "brightness", 0.0f, 3.0f, 0.15f, true );
++		NewRow()->SetupToggle( L( "Detail textures" ), L( "Extra surface detail up close, where the map has it" ), "r_detailtextures" );
++		NewRow()->SetupToggle( L( "Overbrights" ), L( "Brighter, punchier lighting like the original software look" ), "gl_overbright" );
++		NewRow()->SetupToggle( L( "Texture filtering" ), L( "Smooth textures. Off gives the sharp pixelated look" ), "gl_texture_nearest", true );
++		BackRow();
++		AddRows();
++	}
++};
++ADD_MENU( menu_xbox_video, CMenuXbVideo, UI_XboxVideo_Menu );
++
++/*
++=================
++Settings
++=================
++*/
++class CMenuXbSettings : public CMenuXbScreen
++{
++public:
++	CMenuXbSettings() : CMenuXbScreen( "CMenuXbSettings" ) { }
++private:
++	void _Init() override
++	{
++		title = L( "Settings" );
++
++		NewRow()->SetupButton( L( "Controller" ), L( "Button layout, look sensitivity, aim assist and vibration" ), UI_XboxController_Menu );
++		NewRow()->SetupButton( L( "Gameplay" ), L( "Blood and ragdolls" ), UI_XboxGameplay_Menu );
++		NewRow()->SetupButton( L( "Audio" ), L( "Game, music and HEV suit volume" ), UI_XboxAudio_Menu );
++		NewRow()->SetupButton( L( "Video" ), L( "Gamma, brightness and texture quality" ), UI_XboxVideo_Menu );
++		BackRow();
++		AddRows();
++	}
++};
++ADD_MENU( menu_xbox_settings, CMenuXbSettings, UI_XboxSettings_Menu );
 +
 +#endif // XASH_UWP
