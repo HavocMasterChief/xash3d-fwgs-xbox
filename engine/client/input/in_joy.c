@@ -95,6 +95,28 @@ static void Joy_XbSetSprint( qboolean on )
 	xb_sprinting = on;
 }
 
+// the game sets the speed (dlls/player.cpp: 192 walking, 320 sprinting), so
+// it holds whatever way the stick's movement reaches it. Sent on every change
+// and every couple of seconds, so a level change or a load can't leave it stale.
+static int xb_sprint_sent = -1;
+static double xb_sprint_sent_time;
+
+static void Joy_XbSendSprint( void )
+{
+	if( cls.state != ca_active )
+	{
+		xb_sprint_sent = -1;
+		return;
+	}
+
+	if( xb_sprint_sent != (int)xb_sprinting || host.realtime - xb_sprint_sent_time > 2.0 )
+	{
+		Cbuf_AddText( xb_sprinting ? "cmd xbsprint 1\n" : "cmd xbsprint 0\n" );
+		xb_sprint_sent = xb_sprinting;
+		xb_sprint_sent_time = host.realtime;
+	}
+}
+
 static void Joy_XbSprintDown_f( void )
 {
 	Joy_XbSetSprint( joy_sprint_mode.value ? true : !xb_sprinting );
@@ -127,10 +149,7 @@ void Joy_XbScaleMove( float *forward, float *side, float *maxspeed )
 	if( len < 0.2f && !joy_sprint_mode.value && xb_sprinting )
 		Joy_XbSetSprint( false );
 
-	if( xb_sprinting )
-		return;
-
-	*maxspeed *= bound( 0.1f, joy_walk_scale.value, 1.0f );
+	(void)maxspeed;   // the game holds the speed now (Joy_XbSendSprint)
 }
 
 static void Joy_XbCrouchDown_f( void )
@@ -207,6 +226,8 @@ static void Joy_XbDpadDown_f( void )
 // steps the long jump: duck, then jump a moment later, then let go of both
 void Joy_XbFrame( void )
 {
+	Joy_XbSendSprint();
+
 	if( !xb_longjump_stage )
 		return;
 
@@ -892,6 +913,11 @@ void Joy_FinalizeMove( float *fw, float *side, float *dpitch, float *dyaw )
 	*fw     -= joy_forward.value * (float)joyaxis[JOY_AXIS_FWD ].val/(float)SHRT_MAX;  // must be form -1.0 to 1.0
 	*side   += joy_side.value    * (float)joyaxis[JOY_AXIS_SIDE].val/(float)SHRT_MAX;
 #if XASH_UWP
+	{
+		// a toggled sprint ends when the stick is let go
+		float dummy = 0.0f;
+		Joy_XbScaleMove( fw, side, &dummy );
+	}
 	Joy_XboxLook( *fw, *side, dpitch, dyaw );
 #else
 	*dpitch += joy_pitch.value * (float)joyaxis[JOY_AXIS_PITCH].val/(float)SHRT_MAX * host.realframetime;

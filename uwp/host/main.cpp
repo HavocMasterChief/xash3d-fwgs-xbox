@@ -117,12 +117,16 @@ int main( int argc, char *argv[] )
 	// with a single vertex buffer, and on ANGLE async writes overwrite geometry
 	// the GPU hasn't drawn yet, which shows up as surfaces flickering
 	static char argNoAsync[] = "-noasync";
+	// ...and no mapped buffers at all: rewriting the one mapped buffer for each
+	// draw let a surface pick up the previous draw's texture coordinates for a
+	// frame (a wall or floor flashing a flat colour). Plain uploads are synced.
+	static char argNoMap[] = "-nomapbuffer";
 	static char *engineArgs[] = { arg0, argDev, argDevLevel, argLog, argRef, argRefName,
-		argNoAsync, argLevelshots, argOne, argNotify, argZero, NULL };
+		argNoAsync, argNoMap, argLevelshots, argOne, argNotify, argZero, NULL };
 
 	(void)argc;
 	(void)argv;
 
 	// base game folder in LocalState (and in the package)
-	return Host_Main( 11, engineArgs, "HalfLife", 0, NULL );
+	return Host_Main( 12, engineArgs, "HalfLife", 0, NULL );
 }
