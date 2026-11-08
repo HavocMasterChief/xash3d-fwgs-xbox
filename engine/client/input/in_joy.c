@@ -88,15 +88,22 @@ static CVAR_DEFINE_AUTO( joy_sprint_mode, "0", FCVAR_ARCHIVE | FCVAR_FILTERABLE,
 static CVAR_DEFINE_AUTO( joy_walk_scale, "0.6", FCVAR_ARCHIVE | FCVAR_FILTERABLE, "walking speed as a share of full (sprint) speed" );
 static qboolean xb_sprinting;
 
+static void Joy_XbSetSprint( qboolean on )
+{
+	if( on != xb_sprinting )
+		Con_Printf( "xb: sprint %s\n", on ? "on" : "off" );
+	xb_sprinting = on;
+}
+
 static void Joy_XbSprintDown_f( void )
 {
-	xb_sprinting = joy_sprint_mode.value ? true : !xb_sprinting;
+	Joy_XbSetSprint( joy_sprint_mode.value ? true : !xb_sprinting );
 }
 
 static void Joy_XbSprintUp_f( void )
 {
 	if( joy_sprint_mode.value )
-		xb_sprinting = false;
+		Joy_XbSetSprint( false );
 }
 
 qboolean Joy_XbSprinting( void )
@@ -117,8 +124,8 @@ void Joy_XbScaleMove( float *forward, float *side, float *maxspeed )
 	float len = sqrtf( *forward * *forward + *side * *side );
 
 	// a toggled sprint ends when you let go of the stick
-	if( len < 0.2f && !joy_sprint_mode.value )
-		xb_sprinting = false;
+	if( len < 0.2f && !joy_sprint_mode.value && xb_sprinting )
+		Joy_XbSetSprint( false );
 
 	if( xb_sprinting )
 		return;
@@ -129,7 +136,8 @@ void Joy_XbScaleMove( float *forward, float *side, float *maxspeed )
 static void Joy_XbCrouchDown_f( void )
 {
 	// crouching ends a sprint
-	xb_sprinting = false;
+	if( xb_sprinting )
+		Joy_XbSetSprint( false );
 
 	if( joy_crouch_toggle.value )
 	{
@@ -145,28 +153,76 @@ static void Joy_XbCrouchDown_f( void )
 
 // View + D-pad chords: View alone shows scores, View + Up quicksaves,
 // View + Down quickloads; Up/Down alone still change weapons
-static qboolean xb_view_held;
+// View: a tap toggles the flashlight; held with D-pad Up/Down it quick
+// saves / quick loads instead (and then the light isn't touched)
+static qboolean xb_view_held, xb_view_used;
 
 static void Joy_XbViewDown_f( void )
 {
 	xb_view_held = true;
-	Cbuf_AddText( "+showscores\n" );
+	xb_view_used = false;
 }
 
 static void Joy_XbViewUp_f( void )
 {
+	if( xb_view_held && !xb_view_used )
+		Cbuf_AddText( "impulse 100\n" );
 	xb_view_held = false;
-	Cbuf_AddText( "-showscores\n" );
 }
+
+// D-pad Up: long jump (crouch + jump in one go), Down: tell the ally you're
+// looking at to follow or wait (xbally, game dll)
+static double xb_longjump_time;
+static int xb_longjump_stage;
 
 static void Joy_XbDpadUp_f( void )
 {
-	Cbuf_AddText( xb_view_held ? "savequick\n" : "invprev\n" );
+	if( xb_view_held )
+	{
+		xb_view_used = true;
+		Cbuf_AddText( "savequick\n" );
+		return;
+	}
+
+	// the long jump module wants jump pressed just after crouching while moving
+	if( xb_longjump_stage == 0 )
+	{
+		Cbuf_AddText( "+duck\n" );
+		xb_longjump_stage = 1;
+		xb_longjump_time = host.realtime;
+	}
 }
 
 static void Joy_XbDpadDown_f( void )
 {
-	Cbuf_AddText( xb_view_held ? "loadquick\n" : "invnext\n" );
+	if( xb_view_held )
+	{
+		xb_view_used = true;
+		Cbuf_AddText( "loadquick\n" );
+		return;
+	}
+	Cbuf_AddText( "xbally\n" );
+}
+
+// steps the long jump: duck, then jump a moment later, then let go of both
+void Joy_XbFrame( void )
+{
+	if( !xb_longjump_stage )
+		return;
+
+	double t = host.realtime - xb_longjump_time;
+	if( xb_longjump_stage == 1 && t > 0.05 )
+	{
+		Cbuf_AddText( "+jump\n" );
+		xb_longjump_stage = 2;
+	}
+	else if( xb_longjump_stage == 2 && t > 0.3 )
+	{
+		Cbuf_AddText( "-jump\n" );
+		if( !xb_crouched )
+			Cbuf_AddText( "-duck\n" );
+		xb_longjump_stage = 0;
+	}
 }
 
 // D-pad left/right: cycle the weapon wheel's category while it's open,
@@ -804,6 +860,9 @@ static void Joy_XboxLook( float fw, float side, float *dpitch, float *dyaw )
 
 void Joy_FinalizeMove( float *fw, float *side, float *dpitch, float *dyaw )
 {
+#if XASH_UWP
+	Joy_XbFrame();
+#endif
 	Joy_TouchpadMove( fw, side, dpitch, dyaw );
 
 	if( !Joy_IsActive( ))
@@ -1200,6 +1259,17 @@ void Joy_AutoPreset( void )
 	}
 #endif
 
+#if XASH_UWP
+	// Xbox: the layout belongs to the build (there's no remapping screen), so
+	// gamepad_presets/xbox.cfg is applied at every launch and a config saved
+	// by an older build can't leave a button on an old command
+	s_tried = true;
+	Con_Printf( "Applying the Xbox controller layout\n" );
+	Joy_LoadPreset( "xbox" );
+	Cbuf_AddText( "bindlist\n" );
+	return;
+#endif
+
 	// only pick once, user changes it from the menu afterwards
 	if( COM_StringEmptyOrNULL( joy_suggested_preset ) || !COM_StringEmptyOrNULL( joy_preset.string ))
 		return;
@@ -1272,11 +1342,11 @@ void Joy_Init( void )
 	Cmd_AddCommand( "+xbcrouch", Joy_XbCrouchDown_f, "crouch, held or toggled (joy_crouch_toggle)" );
 	Cmd_AddCommand( "-xbcrouch", Joy_XbCrouchUp_f, "release crouch when not toggled" );
 	Cmd_AddCommand( "xb_rumble", Joy_XbRumble_f, "controller rumble: low high ms [right trigger] [left trigger]" );
-	Cmd_AddCommand( "+xbview", Joy_XbViewDown_f, "scores, and the modifier for View + D-pad quicksave/quickload" );
+	Cmd_AddCommand( "+xbview", Joy_XbViewDown_f, "flashlight on a tap, the modifier for View + D-pad quicksave/quickload" );
 	Cmd_AddCommand( "-xbview", Joy_XbViewUp_f, "" );
-	Cmd_AddCommand( "+xbdpadup", Joy_XbDpadUp_f, "previous weapon, or quicksave while View is held" );
+	Cmd_AddCommand( "+xbdpadup", Joy_XbDpadUp_f, "long jump, or quicksave while View is held" );
 	Cmd_AddCommand( "-xbdpadup", Joy_XbNop_f, "" );
-	Cmd_AddCommand( "+xbdpaddown", Joy_XbDpadDown_f, "next weapon, or quickload while View is held" );
+	Cmd_AddCommand( "+xbdpaddown", Joy_XbDpadDown_f, "ally follow/wait, or quickload while View is held" );
 	Cmd_AddCommand( "-xbdpaddown", Joy_XbNop_f, "" );
 	Cmd_AddCommand( "+xbdpadleft", Joy_XbDpadLeft_f, "quicksave, or previous weapon in the wheel's category" );
 	Cmd_AddCommand( "-xbdpadleft", Joy_XbNop_f, "" );

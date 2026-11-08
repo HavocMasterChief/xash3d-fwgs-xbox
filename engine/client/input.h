@@ -165,6 +165,7 @@ void Joy_FinalizeMove( float *fw, float *side, float *dpitch, float *dyaw );
 #if XASH_UWP
 void Joy_XbScaleMove( float *forward, float *side, float *maxspeed );
 qboolean Joy_XbSprinting( void );
+void Joy_XbFrame( void );
 #endif
 void Joy_DrawDebug( void );
 void Joy_Init( void );
