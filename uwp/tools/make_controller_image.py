@@ -81,7 +81,7 @@ def label(anchor_pt, text_pt, text, align):
 # left side
 label((cx - 230, cy - 178), (330, 70), 'LT  Alt fire', 'r')
 label((cx - 220, cy - 134), (330, 130), 'LB  Weapon wheel', 'r')
-label((ls[0] - 42, ls[1]), (330, 230), 'Move / click: Sprint', 'r')
+label((ls[0] - 42, ls[1]), (330, 230), 'Move', 'r')
 label((dp[0] - 40, dp[1]), (330, 400), 'D-pad  (see below)', 'r')
 label((view[0], view[1] - 14), (cx - 90, 30), 'View  Flashlight', 'r')
 # right side

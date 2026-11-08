@@ -101,7 +101,7 @@ static void Joy_XbSetSprint( qboolean on )
 static int xb_sprint_sent = -1;
 static double xb_sprint_sent_time;
 
-static void Joy_XbSendSprint( void )
+static inline void Joy_XbSendSprint( void )
 {
 	if( cls.state != ca_active )
 	{
@@ -226,7 +226,6 @@ static void Joy_XbDpadDown_f( void )
 // steps the long jump: duck, then jump a moment later, then let go of both
 void Joy_XbFrame( void )
 {
-	Joy_XbSendSprint();
 
 	if( !xb_longjump_stage )
 		return;
