@@ -1,0 +1,1 @@
+3310:hl_amd64.exp : warning LNK4070: /OUT:hl.dll directive in .EXP differs from output filename 'D:\a\xash3d-fwgs-xbox\xash3d-fwgs-xbox\build-uwp\hlsdk-build\dlls\Release\hl_amd64.dll'; ignoring directive [D:\a\xash3d-fwgs-xbox\xash3d-fwgs-xbox\build-uwp\hlsdk-build\dlls\server.vcxproj]
