@@ -162,6 +162,10 @@ void Joy_AxisMotionEvent( engineAxis_t engineAxis, short value );
 void Joy_GyroEvent( vec3_t data );
 void Joy_TouchpadEvent( engineTouchpad_t pad, qboolean down, float x, float y, float pressure );
 void Joy_FinalizeMove( float *fw, float *side, float *dpitch, float *dyaw );
+#if XASH_UWP
+void Joy_XbScaleMove( float *forward, float *side, float *maxspeed );
+qboolean Joy_XbSprinting( void );
+#endif
 void Joy_DrawDebug( void );
 void Joy_Init( void );
 void Joy_Shutdown( void );

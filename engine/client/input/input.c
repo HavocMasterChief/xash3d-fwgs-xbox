@@ -530,6 +530,23 @@ static void IN_JoyAppendMove( usercmd_t *cmd, float forwardmove, float sidemove 
 	if( forwardmove ) cmd->forwardmove  = forwardmove * cl_forwardspeed.value;
 	if( sidemove ) cmd->sidemove  = sidemove * cl_sidespeed.value;
 
+#if XASH_UWP
+	{
+		// walk / sprint: cap the stick's speed (in_joy.c Joy_XbScaleMove)
+		float cap = cl.local.maxspeed > 0.0f ? cl.local.maxspeed : 320.0f;
+		float f = forwardmove, s = sidemove;
+
+		Joy_XbScaleMove( &f, &s, &cap );
+
+		float spd = sqrtf( cmd->forwardmove * cmd->forwardmove + cmd->sidemove * cmd->sidemove );
+		if( spd > cap )
+		{
+			cmd->forwardmove *= cap / spd;
+			cmd->sidemove *= cap / spd;
+		}
+	}
+#endif
+
 	if( forwardmove )
 	{
 		moveflags &= ~T;

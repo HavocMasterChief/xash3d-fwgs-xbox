@@ -80,8 +80,57 @@ static CVAR_DEFINE_AUTO( joy_crouch_toggle, "0", FCVAR_ARCHIVE | FCVAR_FILTERABL
 
 static qboolean xb_crouched;
 
+// Sprint on the left stick click. Walking with the stick all the way is
+// joy_walk_scale (60%) of full speed; sprinting is full speed.
+// joy_sprint_mode 0: click to sprint, it stops when you stop moving, crouch
+// or click again. 1: sprint while the stick is held in.
+static CVAR_DEFINE_AUTO( joy_sprint_mode, "0", FCVAR_ARCHIVE | FCVAR_FILTERABLE, "sprint button: 0 toggle (stops when you stop or crouch), 1 hold" );
+static CVAR_DEFINE_AUTO( joy_walk_scale, "0.6", FCVAR_ARCHIVE | FCVAR_FILTERABLE, "walking speed as a share of full (sprint) speed" );
+static qboolean xb_sprinting;
+
+static void Joy_XbSprintDown_f( void )
+{
+	xb_sprinting = joy_sprint_mode.value ? true : !xb_sprinting;
+}
+
+static void Joy_XbSprintUp_f( void )
+{
+	if( joy_sprint_mode.value )
+		xb_sprinting = false;
+}
+
+qboolean Joy_XbSprinting( void )
+{
+	return xb_sprinting;
+}
+
+/*
+=============
+Joy_XbScaleMove
+
+Called with the stick's move (-1..1 each) before it becomes speed:
+walking is capped at joy_walk_scale of full speed, sprinting isn't.
+=============
+*/
+void Joy_XbScaleMove( float *forward, float *side, float *maxspeed )
+{
+	float len = sqrtf( *forward * *forward + *side * *side );
+
+	// a toggled sprint ends when you let go of the stick
+	if( len < 0.2f && !joy_sprint_mode.value )
+		xb_sprinting = false;
+
+	if( xb_sprinting )
+		return;
+
+	*maxspeed *= bound( 0.1f, joy_walk_scale.value, 1.0f );
+}
+
 static void Joy_XbCrouchDown_f( void )
 {
+	// crouching ends a sprint
+	xb_sprinting = false;
+
 	if( joy_crouch_toggle.value )
 	{
 		xb_crouched = !xb_crouched;
@@ -1136,6 +1185,7 @@ void Joy_AutoPreset( void )
 			{ K_DPAD_LEFT,   "savequick",   "+xbdpadleft" },
 			{ K_DPAD_RIGHT,  "lastinv",     "+xbdpadright" },
 			{ K_L1_BUTTON,   "invprev",     "+xbwheel" },
+			{ K_LSTICK,      "+voicerecord", "+xbsprint" },
 			{ K_R1_BUTTON,   "invnext",     "impulse 100" }, // flashlight
 			{ K_RSTICK,      "impulse 100", "xbkick" },
 		};
@@ -1215,6 +1265,10 @@ void Joy_Init( void )
 	Cvar_RegisterVariable( &joy_invert );
 	Cvar_RegisterVariable( &joy_aimassist );
 	Cvar_RegisterVariable( &joy_crouch_toggle );
+	Cvar_RegisterVariable( &joy_sprint_mode );
+	Cvar_RegisterVariable( &joy_walk_scale );
+	Cmd_AddCommand( "+xbsprint", Joy_XbSprintDown_f, "sprint: toggled or held (joy_sprint_mode)" );
+	Cmd_AddCommand( "-xbsprint", Joy_XbSprintUp_f, "" );
 	Cmd_AddCommand( "+xbcrouch", Joy_XbCrouchDown_f, "crouch, held or toggled (joy_crouch_toggle)" );
 	Cmd_AddCommand( "-xbcrouch", Joy_XbCrouchUp_f, "release crouch when not toggled" );
 	Cmd_AddCommand( "xb_rumble", Joy_XbRumble_f, "controller rumble: low high ms [right trigger] [left trigger]" );

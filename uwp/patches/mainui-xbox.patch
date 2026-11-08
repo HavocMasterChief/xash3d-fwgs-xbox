@@ -1385,10 +1385,10 @@ index 0000000..343a230
 +#endif // XASH_UWP
 diff --git a/menus/XboxSettings.cpp b/menus/XboxSettings.cpp
 new file mode 100644
-index 0000000..4e2014a
+index 0000000..40ad523
 --- /dev/null
 +++ b/menus/XboxSettings.cpp
-@@ -0,0 +1,242 @@
+@@ -0,0 +1,244 @@
 +/*
 +XboxSettings.cpp - the Xbox build's Settings menus
 +Copyright (C) 2026 HavocMasterChief
@@ -1520,6 +1520,8 @@ index 0000000..4e2014a
 +		NewRow()->SetupSlider( L( "Look sensitivity" ), L( "How fast the right stick turns the view" ), "joy_look_sens", 0.25f, 3.0f, 0.05f, false );
 +		NewRow()->SetupList( L( "Aim assist" ), L( "Slows and nudges your aim when it crosses an enemy" ), "joy_aimassist", aimNames, NULL, 4 );
 +		NewRow()->SetupToggle( L( "Invert look" ), L( "Push the right stick up to look down" ), "joy_invert" );
++		static const char *sprintNames[] = { "Toggle", "Hold" };
++		NewRow()->SetupList( L( "Sprint" ), L( "Left stick click. Toggle: click once, it stops when you stop or crouch. Hold: keep the stick pressed" ), "joy_sprint_mode", sprintNames, NULL, 2 );
 +		NewRow()->SetupToggle( L( "Toggle crouch" ), L( "Press B once to crouch and again to stand, instead of holding it" ), "joy_crouch_toggle" );
 +		NewRow()->SetupToggle( L( "Quick turn" ), L( "Turning speeds up when the right stick is held fully sideways" ), "joy_quickturn" );
 +		NewRow()->SetupToggle( L( "Auto-aim" ), L( "Half-Life's own auto-aim: shots bend slightly toward enemies" ), "sv_aim" );
