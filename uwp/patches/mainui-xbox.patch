@@ -1385,10 +1385,10 @@ index 0000000..343a230
 +#endif // XASH_UWP
 diff --git a/menus/XboxSettings.cpp b/menus/XboxSettings.cpp
 new file mode 100644
-index 0000000..4e2014a
+index 0000000..7fd0c06
 --- /dev/null
 +++ b/menus/XboxSettings.cpp
-@@ -0,0 +1,242 @@
+@@ -0,0 +1,243 @@
 +/*
 +XboxSettings.cpp - the Xbox build's Settings menus
 +Copyright (C) 2026 HavocMasterChief
@@ -1600,6 +1600,7 @@ index 0000000..4e2014a
 +		NewRow()->SetupToggle( L( "Detail textures" ), L( "Extra surface detail up close, where the map has it" ), "r_detailtextures" );
 +		NewRow()->SetupToggle( L( "Overbrights" ), L( "Brighter, punchier lighting like the original software look" ), "gl_overbright" );
 +		NewRow()->SetupToggle( L( "Texture filtering" ), L( "Smooth textures. Off gives the sharp pixelated look" ), "gl_texture_nearest", true );
++		NewRow()->SetupToggle( L( "Dynamic lighting" ), L( "Flickering lights, flashlight and muzzle flash light up walls. Test: turn off if walls flicker" ), "r_dynamic" );
 +		BackRow();
 +		AddRows();
 +	}

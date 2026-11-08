@@ -679,6 +679,49 @@ static qboolean LM_AllocBlock( int w, int h, int *x, int *y )
 	return Atlas_AllocBlock( &gl_lms.atlas, w, h, x, y );
 }
 
+#if XASH_UWP
+/*
+=================
+R_XbSafeSubImage
+
+Xbox: update part of a lightmap texture without disturbing the texture
+units used for drawing. ANGLE on the console can keep sampling a stale
+binding after a texture is updated mid-frame, so the update happens on a
+spare unit and the bind cache of the drawing units is forgotten so the
+next surface always gets a real bind.
+=================
+*/
+#define XB_UPLOAD_TMU 3
+static void R_XbForgetBinds( void )
+{
+	for( int i = 0; i < XB_UPLOAD_TMU; i++ )
+	{
+		glState.currentTextures[i] = -1;
+		glState.currentTexturesIndex[i] = 0;
+	}
+}
+
+static void R_XbSafeSubImage( int texnum, int x, int y, int w, int h, const void *data )
+{
+	const gl_texture_t *tex = R_GetTexture( texnum );
+
+	if( !pglActiveTextureARB || GL_MaxTextureUnits() <= XB_UPLOAD_TMU )
+	{
+		GL_Bind( XASH_TEXTURE0, texnum );
+		pglTexSubImage2D( GL_TEXTURE_2D, 0, x, y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, data );
+		R_XbForgetBinds();
+		return;
+	}
+
+	pglActiveTextureARB( GL_TEXTURE0_ARB + XB_UPLOAD_TMU );
+	pglBindTexture( GL_TEXTURE_2D, tex->texnum );
+	pglTexSubImage2D( GL_TEXTURE_2D, 0, x, y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, data );
+	pglBindTexture( GL_TEXTURE_2D, 0 );
+	pglActiveTextureARB( GL_TEXTURE0_ARB + glState.activeTMU );
+	R_XbForgetBinds();
+}
+#endif
+
 static void LM_UploadDynamicBlock( void )
 {
 	pglTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, BLOCK_SIZE, gl_lms.atlas.max_height, GL_RGBA, GL_UNSIGNED_BYTE, gl_lms.lightmap_buffer );
@@ -688,8 +731,13 @@ static void LM_UploadBlock( qboolean dynamic )
 {
 	if( dynamic )
 	{
+#if XASH_UWP
+		R_XbSafeSubImage( tr.dlightTexture, 0, 0, BLOCK_SIZE, gl_lms.atlas.max_height, gl_lms.lightmap_buffer );
+		GL_Bind( XASH_TEXTURE0, tr.dlightTexture ); // drawn with next
+#else
 		GL_Bind( XASH_TEXTURE0, tr.dlightTexture );
 		LM_UploadDynamicBlock();
+#endif
 	}
 	else
 	{
@@ -1482,6 +1530,9 @@ static qboolean R_CheckLightMap( msurface_t *fa )
 
 		R_UpdateSurfaceCachedLight( fa );
 
+#if XASH_UWP
+		R_XbSafeSubImage( tr.lightmapTextures[fa->lightmaptexturenum], fa->light_s, fa->light_t, smax, tmax, temp );
+#else
 #if XASH_WES
 		GL_Bind( XASH_TEXTURE1, tr.lightmapTextures[fa->lightmaptexturenum] );
 		pglTexParameteri( GL_TEXTURE_2D, GL_GENERATE_MIPMAP_SGIS, GL_TRUE );
@@ -1489,6 +1540,7 @@ static qboolean R_CheckLightMap( msurface_t *fa )
 		GL_Bind( XASH_TEXTURE0, tr.lightmapTextures[fa->lightmaptexturenum] );
 #endif
 		pglTexSubImage2D( GL_TEXTURE_2D, 0, fa->light_s, fa->light_t, smax, tmax, GL_RGBA, GL_UNSIGNED_BYTE, temp );
+#endif
 
 #if XASH_WES
 		GL_SelectTexture( XASH_TEXTURE0 );

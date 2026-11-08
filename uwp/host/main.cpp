@@ -121,18 +121,12 @@ int main( int argc, char *argv[] )
 	// draw let a surface pick up the previous draw's texture coordinates for a
 	// frame (a wall or floor flashing a flat colour). Plain uploads are synced.
 	static char argNoMap[] = "-nomapbuffer";
-	// ...and a fresh vertex buffer for every draw (VAOs, cycling 4096 buffers)
-	// instead of rewriting one shared buffer: old ANGLE doesn't protect a buffer
-	// the GPU is still drawing from, so surfaces picked up the next draw's data
-	// for a frame. The log's GL2_ShimInit line should read CYCLE=4096.
-	static char argVao[] = "-vao";
-	static char argNoInc[] = "-noincremental";
 	static char *engineArgs[] = { arg0, argDev, argDevLevel, argLog, argRef, argRefName,
-		argNoAsync, argNoMap, argVao, argNoInc, argLevelshots, argOne, argNotify, argZero, NULL };
+		argNoAsync, argNoMap, argLevelshots, argOne, argNotify, argZero, NULL };
 
 	(void)argc;
 	(void)argv;
 
 	// base game folder in LocalState (and in the package)
-	return Host_Main( 14, engineArgs, "HalfLife", 0, NULL );
+	return Host_Main( 12, engineArgs, "HalfLife", 0, NULL );
 }
